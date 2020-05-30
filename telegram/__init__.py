@@ -8,10 +8,9 @@ class Bot(TeleBot):
     def __init__(self, token):
         super().__init__(token)
 
-    def message_handler(self, handler, commands=None, regexp=None, func=None, content_types=None, **kwargs):
+    def message_handler_method(self, handler, commands=None, regexp=None, func=None, content_types=None, **kwargs):
         """
-        Простая функция, которая до переопределения была декоратором.
-        Подробнее в документации на pyTelegramBotApi
+        Публичный метод, повторяющий функциональность декоратора message_handler
 
         :param handler: функция-обрабатчик сообщений из Телеграма
         :param commands: список команд для реагирования
@@ -52,5 +51,5 @@ class Bot(TeleBot):
             assert isinstance(plugin['commands'], list), \
                 'в словаре плагина по ключу "commands" содержится не список ' + repr(plugin)
             assert all(list(map(lambda type_of: isinstance(type_of, str), plugin['commands']))), \
-                'в списке "commands" словаря плагина содержатся не строки' + repr(plugin)
-            self.message_handler(plugin['handler'], commands=plugin['commands'])
+                'в списке "commands" словаря плагина содержатся не строки ' + repr(plugin)
+            self.message_handler_method(plugin['handler'], commands=plugin['commands'])
