@@ -53,3 +53,17 @@ class Bot(TeleBot):
             assert all(list(map(lambda type_of: isinstance(type_of, str), plugin['commands']))), \
                 'в списке "commands" словаря плагина содержатся не строки ' + repr(plugin)
             self.message_handler_method(plugin['handler'], commands=plugin['commands'])
+
+    def _exec_task(self, task, *args, **kwargs):
+        """
+        Переопределенный метод из класса TeleBot
+        Костыль, вбитый для того, чтобы плагины получали доступ к объекту бота
+        :param task: функция (хендлер)
+        :param args:
+        :param kwargs:
+        :return:
+        """
+        if self.threaded:
+            self.worker_pool.put(task, self, *args, **kwargs)
+        else:
+            task(self, *args, **kwargs)

@@ -32,6 +32,6 @@ class Dispatcher(Thread):
                 self.returns_stack.append(plugin['handler']())
 
     def task_handler(self, task):
-        if task['task'] == 'send text':
+        if task['task'] == 'send_text':
             for telegram_id in task['id']:
                 self.bot.send_message(telegram_id, task['message'])
