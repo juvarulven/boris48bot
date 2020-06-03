@@ -1,9 +1,11 @@
 def test_simple(bot, message):
+    print('test_simple work')
     bot.send_message(message.from_user.id, 'passed!')
 
 
 def test_scheduled():
-    return {'task': 'send_text', 'id': [''], 'message': 'scheduled test passed!'}
+    print('sending scheduled test message')
+    return {'task': 'send_text', 'id': ['383489759'], 'message': 'scheduled test passed!'}
 
 
 __all__ = ['test_simple', 'test_scheduled']
