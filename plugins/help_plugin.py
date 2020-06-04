@@ -1,7 +1,7 @@
-from . import plugins
+from . import command_handlers
 
 commands = ''
-for plugin in plugins:
+for plugin in command_handlers:
     commands += '\n'
     for command in plugin['commands']:
         commands += '/' + command + ' '
