@@ -1,21 +1,18 @@
-from . import command_handlers
+commands_list = ['/start: отправлять приветствие',
+                 '/help: присылать краткую справка по командам',
+                 '/test: отвечать "passed!"']
 
-commands = ''
-for plugin in command_handlers:
-    commands += '\n'
-    for command in plugin['commands']:
-        commands += '/' + command + ' '
-    commands += plugin['help']
+commands = '\n'.join(commands_list)
 
 
 def start_message(bot, message):
-    answer = 'Приветствую. Я -- маленький бот сайта https://vault48.org\nВот что я умею:'
+    answer = 'Приветствую.\nЯ -- маленький бот сайта https://vault48.org\n\nВот что я умею:\n'
     answer += commands
     bot.send_message(message.from_user.id, answer)
 
 
 def help_message(bot, message):
-    answer = 'Вот что я умею:'
+    answer = 'Вот что я умею:\n'
     answer += commands
     bot.send_message(message.from_user.id, answer)
 

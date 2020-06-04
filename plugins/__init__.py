@@ -25,19 +25,21 @@ from . import my_plugin
 4. Зарегистрировать функции в специальных переменных здесь:
 4.1 Для command handler'ов добавить в список command_handlers словарь вида:
 
-{'commands': ['комманда'...], 'handler': плагин.функция-обработчик, 'help': 'краткое описание для команд справки'}
+{'commands': ['комманда'...], 'handler': плагин.функция-обработчик}
 
 4.2 Для scheduled handler'oв добавить в список scheduled_handler словарь вида:
 
 {'handler': плагин.функция, 'minutes': периодичность срабатывания в минутах типа float или int}
+
+5. Добавить в commands_list плагина help_plugins.py справку по комманде, если нужно.
 """
 
 from . import test_plugin
 from . import help_plugin
 
-command_handlers = [{'commands': ['start'], 'handler': help_plugin.start_message, 'help': 'присылаю приветствие'},
-                    {'commands': ['help'], 'handler': help_plugin.help_message, 'help': 'присылаю справку по командам'},
-                    {'commands': ['test'], 'handler': test_plugin.test_simple, 'help': 'отвечаю "passed!"'}]
+command_handlers = [{'commands': ['start'], 'handler': help_plugin.start_message},
+                    {'commands': ['help'], 'handler': help_plugin.help_message},
+                    {'commands': ['test'], 'handler': test_plugin.test_simple}]
 
 scheduled_handlers = [{'handler': test_plugin.test_scheduled, 'minutes': 1}]
 
