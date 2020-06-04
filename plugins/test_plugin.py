@@ -1,3 +1,6 @@
+"""
+Плагин тестирования
+"""
 from bot_admin import ADMIN_ID
 
 
