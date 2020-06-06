@@ -62,7 +62,10 @@ class Vault:
             response = requests.get(self.flow_api_url, params)
             status = response.status_code
         response = json.loads(response.text)
-        self.flow_messages = response['before']
+        response = response['before']
+        while response:
+            message = response.pop()
+            self.flow_messages.append(message)
         if self.flow_messages:
             dt = datetime.datetime.utcnow().isoformat(timespec='milliseconds')
             self.update_database('flow', dt)
@@ -77,10 +80,9 @@ class Vault:
             status = response.status_code
         response = json.loads(response.text)
         response = response['comments']
-        slice_border = 0
-        for slice_border, comment in enumerate(response):
-            if comment['id'] == self.boris_last_update:
-                break
-        if slice_border:
-            self.boris_messages = response[:slice_border]
-            self.update_database('boris', self.boris_messages[0]['id'])
+        comment = response.pop()
+        while comment['id'] != self.boris_messages:
+            self.boris_messages.append(comment)
+            comment = response.pop()
+        if self.boris_messages:
+            self.update_database('boris', self.boris_messages[-1]['id'])
