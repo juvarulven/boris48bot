@@ -6,7 +6,8 @@ commands_list -- список строк команд с описанием
 
 commands_list = ['/start: отправлять приветствие',
                  '/help: присылать краткую справка по командам',
-                 '/test: отвечать "passed!"']
+                 '/test: отвечать "passed!"',
+                 '/speak: говорить фразу, украденную из Убежища']
 
 commands = '\n'.join(commands_list)
 

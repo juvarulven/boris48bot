@@ -82,5 +82,5 @@ class Vault:
             if comment['id'] == self.boris_last_update:
                 break
         if slice_border:
-            self.update_database('boris', response[0]['id'])
             self.boris_messages = response[:slice_border]
+            self.update_database('boris', self.boris_messages[0]['id'])

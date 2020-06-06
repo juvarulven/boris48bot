@@ -39,10 +39,12 @@ from . import my_plugin
 
 from . import test_plugin
 from . import help_plugin
+from . import speak_plugin
 
 command_handlers = [{'commands': ['start'], 'handler': help_plugin.start_message},
                     {'commands': ['help'], 'handler': help_plugin.help_message},
-                    {'commands': ['test'], 'handler': test_plugin.test_simple}]
+                    {'commands': ['test'], 'handler': test_plugin.test_simple},
+                    {'commands': ['speak'], 'handler': speak_plugin.speak_message}]
 
 scheduled_handlers = [{'handler': test_plugin.test_scheduled, 'minutes': 1}]
 
