@@ -88,12 +88,9 @@ class Vault:
         while status != 200:
             response = requests.get(self.flow_api_url, params=params)
             status = response.status_code
-        response = response.json()['before']
-        while response:
-            message = response.pop()
-            self.flow_messages.append(message)
+        self.flow_messages = response.json()['before']
         if self.flow_messages:
-            self.flow_last_update = datetime.datetime.utcnow().isoformat(timespec='milliseconds')
+            self.flow_last_update = datetime.datetime.utcnow().isoformat(timespec='milliseconds') + 'Z'
             self.update_database('flow', self.flow_last_update)
 
     def update_boris(self):
@@ -148,7 +145,7 @@ class Vault:
 
     def create_image_task(self, author, title, description, link):
         template = 'Скрывающийся под псевдонимом _~{}_ поделился фото в Течении:' \
-                   '\n\n*{}*и написал:\n{}\n{}'
+                   '\n\n*{}*\nи написал:\n{}\n{}'
         message = template.format(author, title, description, link)
         return {'task': 'send_md_text', 'id': self.subscribers['flow'], 'message': message}
 
