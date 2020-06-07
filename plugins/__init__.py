@@ -18,7 +18,7 @@ message: объект сообщения из телеграма, по кото�
 она может возвращать список словарей с заданиями для диспетчера. Пример:
 
 def my_scheduled_plugin():
-    return [{'task': 'send_text', 'id': ['123456789'], 'message': 'какое-то сообщение'}]
+    return [{'task': 'send_text', 'id': [123456789], 'message': 'какое-то сообщение'}]
 
 3* Импротировать плагин сюда. Пример:
 
@@ -35,6 +35,10 @@ from . import my_plugin
 {'handler': плагин.функция, 'minutes': периодичность срабатывания в минутах типа float или int}
 
 5* Добавить в commands_list плагина help_plugins.py справку по комманде, если нужно.
+
+Задания для диспетчера могут быть:
+[{'task': 'send_text', id[int], 'message': str}] -- отправить неформатированный текст
+[{'task': 'send_md_text', id[int], 'message': str}] -- отправить текст в Markdown формате
 """
 
 from . import test_plugin
@@ -51,6 +55,6 @@ command_handlers = [{'commands': ['start'], 'handler': help_plugin.start_message
                     {'commands': ['unsubflow'], 'handler': vault_plugin.vault.unsubscribe_flow},
                     {'commands': ['unsubboris'], 'handler': vault_plugin.vault.unsubscribe_boris}]
 
-scheduled_handlers = [{'handler': test_plugin.test_scheduled, 'minutes': 1}]
+scheduled_handlers = [{'handler': vault_plugin.vault.scheduled, 'minutes': 0.5}]
 
 __all__ = ['command_handlers', 'scheduled_handlers']

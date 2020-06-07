@@ -1,6 +1,5 @@
 import sqlite3
 import requests
-import json
 import datetime
 from config import DATABASE
 
@@ -9,8 +8,8 @@ class Vault:
     def __init__(self, vault_url, api_port, database):
         self.vault_url = vault_url
         self.api_port = api_port
-        self.flow_api_url = 'https://{}:{}/node/diff'.format(vault_url, api_port)
-        self.boris_api_url = 'https://{}:{}/node/696/comment'.format(vault_url, api_port)
+        self.flow_api_url = '{}:{}/node/diff'.format(vault_url, api_port)
+        self.boris_api_url = '{}:{}/node/696/comment'.format(vault_url, api_port)
         self.flow_messages = []
         self.boris_messages = []
         self.subscribers = {'flow': [], 'boris': []}
@@ -30,10 +29,10 @@ class Vault:
             status = 0
             response = None
             while status != 200:
-                response = requests.get(self.boris_api_url, params)
+                response = requests.get(self.boris_api_url, params=params)
                 status = response.status_code
-            response = json.loads(response.text)
-            self.boris_last_update = response[0]['id']
+            response = response.json()['comments'][0]
+            self.boris_last_update = response['id']
             cursor.execute('INSERT INTO vault_last_update VALUES("{}", {})'.format(self.flow_last_update,
                                                                                    self.boris_last_update))
         else:
@@ -87,16 +86,15 @@ class Vault:
         status = 0
         response = None
         while status != 200:
-            response = requests.get(self.flow_api_url, params)
+            response = requests.get(self.flow_api_url, params=params)
             status = response.status_code
-        response = json.loads(response.text)
-        response = response['before']
+        response = response.json()['before']
         while response:
             message = response.pop()
             self.flow_messages.append(message)
         if self.flow_messages:
-            dt = datetime.datetime.utcnow().isoformat(timespec='milliseconds')
-            self.update_database('flow', dt)
+            self.flow_last_update = datetime.datetime.utcnow().isoformat(timespec='milliseconds')
+            self.update_database('flow', self.flow_last_update)
 
     def update_boris(self):
         params = {'take': 25,
@@ -104,16 +102,17 @@ class Vault:
         status = 0
         response = None
         while status != 200:
-            response = requests.get(self.boris_api_url, params)
+            response = requests.get(self.boris_api_url, params=params)
             status = response.status_code
-        response = json.loads(response.text)
-        response = response['comments']
+        response = response.json()['comments']
+        response.reverse()
         comment = response.pop()
-        while comment['id'] != self.boris_messages:
+        while comment['id'] > self.boris_last_update:
             self.boris_messages.append(comment)
             comment = response.pop()
         if self.boris_messages:
-            self.update_database('boris', self.boris_messages[-1]['id'])
+            self.boris_last_update = self.boris_messages[0]['id']
+            self.update_database('boris', self.boris_last_update)
 
     def subscribe_flow(self, bot, message):
         telegram_id = message.from_user.id
@@ -137,7 +136,7 @@ class Vault:
         if added_subscriber:
             bot.send_message(telegram_id, 'Вы больше не будете получать обновления Течения')
         else:
-            bot.send_message(telegram_id, 'Вы не были подписаны на течение')
+            bot.send_message(telegram_id, 'Вы не были подписаны на Течение')
 
     def unsubscribe_boris(self, bot, message):
         telegram_id = message.from_user.id
@@ -148,35 +147,41 @@ class Vault:
             bot.send_message(telegram_id, 'Вы не были подписаны на Бориса')
 
     def create_image_task(self, author, title, description, link):
-        template = 'Скрывающийся под псевдонимом {} поделился фото в Течении:\n{}и написал:\n{}\n{}'
+        template = 'Скрывающийся под псевдонимом _~{}_ поделился фото в Течении:' \
+                   '\n\n*{}*и написал:\n{}\n{}'
         message = template.format(author, title, description, link)
-        return {'task': 'send_text', 'id': self.subscribers['flow'], 'message': message}
+        return {'task': 'send_md_text', 'id': self.subscribers['flow'], 'message': message}
 
     def create_text_task(self, author, title, description, link):
-        template = 'Скрывающийся под псевдонимом {} поделился мыслями в Течении:\n{}\n{}\n{}'
+        template = 'Скрывающийся под псевдонимом _~{}_ поделился мыслями в Течении:' \
+                   '\n\n*{}*\n{}\n{}'
         message = template.format(author, title, description, link)
-        return {'task': 'send_text', 'id': self.subscribers['flow'], 'message': message}
+        return {'task': 'send_md_text', 'id': self.subscribers['flow'], 'message': message}
 
     def create_audio_task(self, author, title, description, link):
-        template = 'Скрывающийся под псевдонимом {} поделился аудиозаписью в Течении:\n{}\nи написал:\n{}\n{}'
+        template = 'Скрывающийся под псевдонимом _~{}_ поделился аудиозаписью в Течении:' \
+                   '\n\n*{}*\nи написал:\n{}\n{}'
         message = template.format(author, title, description, link)
-        return {'task': 'send_text', 'id': self.subscribers['flow'], 'message': message}
+        return {'task': 'send_md_text', 'id': self.subscribers['flow'], 'message': message}
 
     def create_video_task(self, author, title, description, link):
-        template = 'Скрывающийся под псевдонимом {} поделился видеозаписью в Течении:\n{}\nи написал:\n{}\n{}'
+        template = 'Скрывающийся под псевдонимом _~{}_ поделился видеозаписью в Течении:' \
+                   '\n\n*{}*\nи написал:\n{}\n{}'
         message = template.format(author, title, description, link)
-        return {'task': 'send_text', 'id': self.subscribers['flow'], 'message': message}
+        return {'task': 'send_md_text', 'id': self.subscribers['flow'], 'message': message}
 
     def create_other_task(self, author, title, description, link):
-        template = 'Скрывающийся под псевдонимом {} поделился чем-то неординарным в Течении:\n{}\nи написал:\n{}\n{}'
+        template = 'Скрывающийся под псевдонимом _~{}_ поделился чем-то неординарным в Течении:' \
+                   '\n\n*{}*\nи написал:\n{}\n{}'
         message = template.format(author, title, description, link)
-        return {'task': 'send_text', 'id': self.subscribers['flow'], 'message': message}
+        return {'task': 'send_md_text', 'id': self.subscribers['flow'], 'message': message}
 
     def create_boris_task(self, author, comment):
-        template = 'Скрывающийся под псевдонимом {} вот что пишет Борису:\n{}\n{}'
+        template = 'Скрывающийся под псевдонимом _~{}_ вот что пишет Борису:' \
+                   '\n\n{}\n{}'
         link = 'https://vault48.org/boris'
         message = template.format(author, comment, link)
-        return {'task': 'send_text', 'id': self.subscribers['boris'], 'message': message}
+        return {'task': 'send_md_text', 'id': self.subscribers['boris'], 'message': message}
 
     def scheduled(self):
         tasks = []
@@ -184,7 +189,7 @@ class Vault:
         self.update_boris()
         while self.flow_messages:
             post = self.flow_messages.pop()
-            author = '~' + post['user']['username']
+            author = post['user']['username']
             title = post['title']
             description = post['description']
             link = 'https://{}/post{}'.format(self.vault_url, post['id'])
@@ -201,12 +206,15 @@ class Vault:
                 tasks.append(self.create_other_task(author, title,description, link))
         while self.boris_messages:
             comment = self.boris_messages.pop()
-            author = '~' + comment['user']['username']
+            author = comment['user']['username']
             text = comment['text']
             tasks.append(self.create_boris_task(author, text))
         return tasks
 
 
-vault = Vault('vault.org', '3333', DATABASE)
+VAULT_URL = 'https://vault48.org'
+VAULT_PORT = 3333
+
+vault = Vault(VAULT_URL, VAULT_PORT, DATABASE)
 
 __all__ = ['vault']

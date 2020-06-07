@@ -1,5 +1,6 @@
 from threading import Thread
 from datetime import datetime, timedelta
+import time
 
 
 class Dispatcher(Thread):
@@ -20,6 +21,7 @@ class Dispatcher(Thread):
             while self.tasks_stack:
                 task = self.tasks_stack.pop()
                 self.task_handler(task)
+            time.sleep(1)
 
     def scheduler(self):
         dt = datetime.utcnow()
@@ -38,3 +40,6 @@ class Dispatcher(Thread):
         if task['task'] == 'send_text':
             for telegram_id in task['id']:
                 self.bot.send_message(telegram_id, task['message'])
+        if task['task'] == 'send_md_text':
+            for telegram_id in task['id']:
+                self.bot.send_message(telegram_id, task['message'], parse_mode='Markdown')
