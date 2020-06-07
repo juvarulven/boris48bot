@@ -2,6 +2,7 @@ import sqlite3
 import requests
 import json
 import datetime
+from config import DATABASE
 
 
 class Vault:
@@ -147,7 +148,7 @@ class Vault:
             bot.send_message(telegram_id, 'Вы не были подписаны на Бориса')
 
 
-vault = Vault('vault.org', '3333', 'database.db')
+vault = Vault('vault.org', '3333', DATABASE)
 
 __all__ = ['vault']
 

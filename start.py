@@ -1,7 +1,7 @@
 from dispatcher import Dispatcher
 from telegram import Bot
 from plugins import command_handlers, scheduled_handlers
-from bot_token import TOKEN
+from config import TOKEN
 
 bot = Bot(TOKEN)
 dp = Dispatcher(bot, command_handlers, scheduled_plugins=scheduled_handlers)

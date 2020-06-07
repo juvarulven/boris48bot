@@ -1,7 +1,7 @@
 """
 Плагин тестирования
 """
-from bot_admin import ADMIN_ID
+from config import ADMIN_ID
 
 
 def test_simple(bot, message):
