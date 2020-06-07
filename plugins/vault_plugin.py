@@ -147,9 +147,66 @@ class Vault:
         else:
             bot.send_message(telegram_id, 'Вы не были подписаны на Бориса')
 
+    def create_image_task(self, author, title, description, link):
+        template = 'Скрывающийся под псевдонимом {} поделился фото в Течении:\n{}и написал:\n{}\n{}'
+        message = template.format(author, title, description, link)
+        return {'task': 'send_text', 'id': self.subscribers['flow'], 'message': message}
+
+    def create_text_task(self, author, title, description, link):
+        template = 'Скрывающийся под псевдонимом {} поделился мыслями в Течении:\n{}\n{}\n{}'
+        message = template.format(author, title, description, link)
+        return {'task': 'send_text', 'id': self.subscribers['flow'], 'message': message}
+
+    def create_audio_task(self, author, title, description, link):
+        template = 'Скрывающийся под псевдонимом {} поделился аудиозаписью в Течении:\n{}\nи написал:\n{}\n{}'
+        message = template.format(author, title, description, link)
+        return {'task': 'send_text', 'id': self.subscribers['flow'], 'message': message}
+
+    def create_video_task(self, author, title, description, link):
+        template = 'Скрывающийся под псевдонимом {} поделился видеозаписью в Течении:\n{}\nи написал:\n{}\n{}'
+        message = template.format(author, title, description, link)
+        return {'task': 'send_text', 'id': self.subscribers['flow'], 'message': message}
+
+    def create_other_task(self, author, title, description, link):
+        template = 'Скрывающийся под псевдонимом {} поделился чем-то неординарным в Течении:\n{}\nи написал:\n{}\n{}'
+        message = template.format(author, title, description, link)
+        return {'task': 'send_text', 'id': self.subscribers['flow'], 'message': message}
+
+    def create_boris_task(self, author, comment):
+        template = 'Скрывающийся под псевдонимом {} вот что пишет Борису:\n{}\n{}'
+        link = 'https://vault48.org/boris'
+        message = template.format(author, comment, link)
+        return {'task': 'send_text', 'id': self.subscribers['boris'], 'message': message}
+
+    def scheduled(self):
+        tasks = []
+        self.update_flow()
+        self.update_boris()
+        while self.flow_messages:
+            post = self.flow_messages.pop()
+            author = '~' + post['user']['username']
+            title = post['title']
+            description = post['description']
+            link = 'https://{}/post{}'.format(self.vault_url, post['id'])
+            content_type = post['type']
+            if content_type == 'image':
+                tasks.append(self.create_image_task(author, title, description, link))
+            if content_type == 'text':
+                tasks.append(self.create_text_task(author, title, description, link))
+            if content_type == 'audio':
+                tasks.append(self.create_audio_task(author, title, description, link))
+            if content_type == 'video':
+                tasks.append(self.create_video_task(author, title, description, link))
+            if content_type == 'other':
+                tasks.append(self.create_other_task(author, title,description, link))
+        while self.boris_messages:
+            comment = self.boris_messages.pop()
+            author = '~' + comment['user']['username']
+            text = comment['text']
+            tasks.append(self.create_boris_task(author, text))
+        return tasks
+
 
 vault = Vault('vault.org', '3333', DATABASE)
 
 __all__ = ['vault']
-
-
