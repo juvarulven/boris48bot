@@ -40,11 +40,16 @@ from . import my_plugin
 from . import test_plugin
 from . import help_plugin
 from . import speak_plugin
+from . import vault_plugin
 
 command_handlers = [{'commands': ['start'], 'handler': help_plugin.start_message},
                     {'commands': ['help'], 'handler': help_plugin.help_message},
                     {'commands': ['test'], 'handler': test_plugin.test_simple},
-                    {'commands': ['speak'], 'handler': speak_plugin.speak_message}]
+                    {'commands': ['speak'], 'handler': speak_plugin.speak_message},
+                    {'commands': ['subflow'], 'handler': vault_plugin.vault.subscribe_flow},
+                    {'commands': ['subboris'], 'handler': vault_plugin.vault.subscribe_boris},
+                    {'commands': ['unsubflow'], 'handler': vault_plugin.vault.unsubscribe_flow},
+                    {'commands': ['unsubboris'], 'handler': vault_plugin.vault.unsubscribe_boris}]
 
 scheduled_handlers = [{'handler': test_plugin.test_scheduled, 'minutes': 1}]
 

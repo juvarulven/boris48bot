@@ -12,8 +12,7 @@ class Vault:
         self.boris_api_url = 'https://{}:{}/node/696/comment'.format(vault_url, api_port)
         self.flow_messages = []
         self.boris_messages = []
-        self.flow_subscribers = []
-        self.boris_subscribers = []
+        self.subscribers = {'flow': [], 'boris': []}
         self.database = database
         self.flow_last_update = None
         self.boris_last_update = None
@@ -36,10 +35,16 @@ class Vault:
             self.boris_last_update = response[0]['id']
             cursor.execute('INSERT INTO vault_last_update VALUES("{}", {})'.format(self.flow_last_update,
                                                                                    self.boris_last_update))
-            conn.commit()
         else:
             last_updates = cursor.execute('SELECT * FROM vault_last_update').fetchone()
             self.flow_last_update, self.boris_last_update = last_updates
+        cursor.execute('CREATE TABLE IF NOT EXISTS flow_subscribers (id INTEGER)')
+        cursor.execute('CREATE TABLE IF NOT EXISTS boris_subscribers (id INTEGER)')
+        conn.commit()
+        raw_subscribers = cursor.execute('SELECT id FROM flow_subscribers').fetchall()
+        self.subscribers['flow'] = list(map(lambda x: x[0], raw_subscribers))
+        raw_subscribers = cursor.execute('SELECT id FROM boris_subscribers').fetchall()
+        self.subscribers['boris'] = list(map(lambda x: x[0], raw_subscribers))
 
     def update_database(self, column, last_update):
         if isinstance(last_update, str):
@@ -48,6 +53,28 @@ class Vault:
         cursor = conn.cursor()
         cursor.execute('UPDATE vault_last_update SET {0} = {1} WHERE {0}'.format(column, last_update))
         conn.commit()
+
+    def add_subscriber(self, target, telegram_id):
+        if telegram_id not in self.subscribers[target]:
+            self.subscribers[target].append(telegram_id)
+            conn = sqlite3.connect(self.database)
+            cursor = conn.cursor()
+            cursor.execute('INSERT INTO {}_subscribers VALUES({})'.format(target, telegram_id))
+            conn.commit()
+            return True
+        else:
+            return False
+
+    def delete_subscriber(self, target, telegram_id):
+        if telegram_id in self.subscribers[target]:
+            self.subscribers[target].remove(telegram_id)
+            conn = sqlite3.connect(self.database)
+            cursor = conn.cursor()
+            cursor.execute('DELETE FROM {}_subscribers WHERE id={}'.format(target, telegram_id))
+            conn.commit()
+            return True
+        else:
+            return False
 
     def update_flow(self):
         params = {'start': self.flow_last_update,
@@ -86,3 +113,42 @@ class Vault:
             comment = response.pop()
         if self.boris_messages:
             self.update_database('boris', self.boris_messages[-1]['id'])
+
+    def subscribe_flow(self, bot, message):
+        telegram_id = message.from_user.id
+        added_subscriber = self.add_subscriber('flow', telegram_id)
+        if added_subscriber:
+            bot.send_message(telegram_id, 'Теперь вы будете получать обновления Течения')
+        else:
+            bot.send_message(telegram_id, 'Вы уже подписаны на Течение')
+
+    def subscribe_boris(self, bot, message):
+        telegram_id = message.from_user.id
+        added_subscriber = self.add_subscriber('boris', telegram_id)
+        if added_subscriber:
+            bot.send_message(telegram_id, 'Теперь вы будете получать обновления Бориса')
+        else:
+            bot.send_message(telegram_id, 'Вы уже подписаны на Бориса')
+
+    def unsubscribe_flow(self, bot, message):
+        telegram_id = message.from_user.id
+        added_subscriber = self.delete_subscriber('flow', telegram_id)
+        if added_subscriber:
+            bot.send_message(telegram_id, 'Вы больше не будете получать обновления Течения')
+        else:
+            bot.send_message(telegram_id, 'Вы не были подписаны на течение')
+
+    def unsubscribe_boris(self, bot, message):
+        telegram_id = message.from_user.id
+        added_subscriber = self.delete_subscriber('boris', telegram_id)
+        if added_subscriber:
+            bot.send_message(telegram_id, 'Вы больше не будете получать обновления Бориса')
+        else:
+            bot.send_message(telegram_id, 'Вы не были подписаны на Бориса')
+
+
+vault = Vault('vault.org', '3333', 'database.db')
+
+__all__ = ['vault']
+
+
