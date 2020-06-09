@@ -143,44 +143,50 @@ class Vault:
         else:
             bot.send_message(telegram_id, 'Вы не были подписаны на Бориса')
 
-    def create_image_task(self, author, title, description, link):
+    def send_image_message(self, bot, author, title, description, link):
         template = 'Скрывающийся под псевдонимом _~{}_ поделился фото в Течении:' \
                    '\n\n*{}*\nи написал:\n{}\n{}'
         message = template.format(author, title, description, link)
-        return {'task': 'send_md_text', 'id': self.subscribers['flow'], 'message': message}
+        for addressee in self.subscribers['flow']:
+            bot.send_message(addressee, message, parse_mode='Markdown')
 
-    def create_text_task(self, author, title, description, link):
+    def send_text_message(self, bot, author, title, description, link):
         template = 'Скрывающийся под псевдонимом _~{}_ поделился мыслями в Течении:' \
                    '\n\n*{}*\n{}\n{}'
         message = template.format(author, title, description, link)
-        return {'task': 'send_md_text', 'id': self.subscribers['flow'], 'message': message}
+        for addressee in self.subscribers['flow']:
+            bot.send_message(addressee, message, parse_mode='Markdown')
 
-    def create_audio_task(self, author, title, description, link):
+    def send_audio_message(self, bot, author, title, description, link):
         template = 'Скрывающийся под псевдонимом _~{}_ поделился аудиозаписью в Течении:' \
                    '\n\n*{}*\nи написал:\n{}\n{}'
         message = template.format(author, title, description, link)
-        return {'task': 'send_md_text', 'id': self.subscribers['flow'], 'message': message}
+        for addressee in self.subscribers['flow']:
+            bot.send_message(addressee, message, parse_mode='Markdown')
 
-    def create_video_task(self, author, title, description, link):
+    def send_video_message(self, bot, author, title, description, link):
         template = 'Скрывающийся под псевдонимом _~{}_ поделился видеозаписью в Течении:' \
                    '\n\n*{}*\nи написал:\n{}\n{}'
         message = template.format(author, title, description, link)
-        return {'task': 'send_md_text', 'id': self.subscribers['flow'], 'message': message}
+        for addressee in self.subscribers['flow']:
+            bot.send_message(addressee, message, parse_mode='Markdown')
 
-    def create_other_task(self, author, title, description, link):
+    def send_other_message(self, bot, author, title, description, link):
         template = 'Скрывающийся под псевдонимом _~{}_ поделился чем-то неординарным в Течении:' \
                    '\n\n*{}*\nи написал:\n{}\n{}'
         message = template.format(author, title, description, link)
-        return {'task': 'send_md_text', 'id': self.subscribers['flow'], 'message': message}
+        for addressee in self.subscribers['flow']:
+            bot.send_message(addressee, message, parse_mode='Markdown')
 
-    def create_boris_task(self, author, comment):
+    def send_boris_message(self, bot, author, comment):
         template = 'Скрывающийся под псевдонимом _~{}_ вот что пишет Борису:' \
                    '\n\n{}\n{}'
         link = 'https://vault48.org/boris'
         message = template.format(author, comment, link)
-        return {'task': 'send_md_text', 'id': self.subscribers['boris'], 'message': message}
+        for addressee in self.subscribers['boris']:
+            bot.send_message(addressee, message, parse_mode='Markdown')
 
-    def scheduled(self):
+    def scheduled(self, bot):
         tasks = []
         self.update_flow()
         self.update_boris()
@@ -192,20 +198,20 @@ class Vault:
             link = 'https://{}/post{}'.format(self.vault_url, post['id'])
             content_type = post['type']
             if content_type == 'image':
-                tasks.append(self.create_image_task(author, title, description, link))
+                tasks.append(self.send_image_message(bot, author, title, description, link))
             if content_type == 'text':
-                tasks.append(self.create_text_task(author, title, description, link))
+                tasks.append(self.send_text_message(bot, author, title, description, link))
             if content_type == 'audio':
-                tasks.append(self.create_audio_task(author, title, description, link))
+                tasks.append(self.send_audio_message(bot, author, title, description, link))
             if content_type == 'video':
-                tasks.append(self.create_video_task(author, title, description, link))
+                tasks.append(self.send_video_message(bot, author, title, description, link))
             if content_type == 'other':
-                tasks.append(self.create_other_task(author, title,description, link))
+                tasks.append(self.send_other_message(bot, author, title, description, link))
         while self.boris_messages:
             comment = self.boris_messages.pop()
             author = comment['user']['username']
             text = comment['text']
-            tasks.append(self.create_boris_task(author, text))
+            tasks.append(self.send_boris_message(bot, author, text))
         return tasks
 
 

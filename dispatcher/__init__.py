@@ -20,7 +20,7 @@ class Dispatcher(Thread):
             self.scheduler()
             while self.tasks_stack:
                 task = self.tasks_stack.pop()
-                self.task_handler(task)
+                self.task_handler(**task)
             time.sleep(1)
 
     def scheduler(self):
@@ -30,16 +30,9 @@ class Dispatcher(Thread):
                 plugin['next_time'] = dt + timedelta(minutes=plugin['minutes'])
             if plugin['next_time'] < dt:
                 plugin['next_time'] = dt + timedelta(minutes=plugin['minutes'])
-                task_list = plugin['handler']()
-                if isinstance(task_list, list):
-                    while task_list:
-                        task = task_list.pop()
-                        self.tasks_stack.append(task)
+                task = plugin['handler'](self.bot)
+                if task:
+                    self.tasks_stack.append(task)
 
-    def task_handler(self, task):
-        if task['task'] == 'send_text':
-            for telegram_id in task['id']:
-                self.bot.send_message(telegram_id, task['message'])
-        if task['task'] == 'send_md_text':
-            for telegram_id in task['id']:
-                self.bot.send_message(telegram_id, task['message'], parse_mode='Markdown')
+    def task_handler(self, **kwargs):
+        pass
