@@ -43,15 +43,15 @@ class Bot(TeleBot):
         while plugins_list:
             plugin = plugins_list.pop()
             assert isinstance(plugin, dict), \
-                'список плагинов содержит не словари ' + repr(plugin)
+                'список плагинов содержит не словари: ' + repr(plugin)
             assert len(plugin) == 2, \
-                'в словаре плагина неправильное число элементов ' + repr(plugin)
+                'в словаре плагина неправильное число элементов: ' + repr(plugin)
             assert hasattr(plugin['handler'], '__call__'), \
-                'в словаре плагина по ключу "function" содержится не функция ' + repr(plugin)
+                'в словаре плагина по ключу "function" содержится не функция: ' + repr(plugin)
             assert isinstance(plugin['commands'], list), \
-                'в словаре плагина по ключу "commands" содержится не список ' + repr(plugin)
+                'в словаре плагина по ключу "commands" содержится не список: ' + repr(plugin)
             assert all(list(map(lambda type_of: isinstance(type_of, str), plugin['commands']))), \
-                'в списке "commands" словаря плагина содержатся не строки ' + repr(plugin)
+                'в списке "commands" словаря плагина содержатся не строки: ' + repr(plugin)
             self.message_handler_method(plugin['handler'], commands=plugin['commands'])
 
     def _exec_task(self, task, *args, **kwargs):

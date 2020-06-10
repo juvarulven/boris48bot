@@ -187,7 +187,6 @@ class Vault:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
     def scheduled(self, bot):
-        tasks = []
         self.update_flow()
         self.update_boris()
         while self.flow_messages:
@@ -198,21 +197,24 @@ class Vault:
             link = 'https://{}/post{}'.format(self.vault_url, post['id'])
             content_type = post['type']
             if content_type == 'image':
-                tasks.append(self.send_image_message(bot, author, title, description, link))
+                self.send_image_message(bot, author, title, description, link)
             if content_type == 'text':
-                tasks.append(self.send_text_message(bot, author, title, description, link))
+                self.send_text_message(bot, author, title, description, link)
             if content_type == 'audio':
-                tasks.append(self.send_audio_message(bot, author, title, description, link))
+                self.send_audio_message(bot, author, title, description, link)
             if content_type == 'video':
-                tasks.append(self.send_video_message(bot, author, title, description, link))
+                self.send_video_message(bot, author, title, description, link)
             if content_type == 'other':
-                tasks.append(self.send_other_message(bot, author, title, description, link))
+                self.send_other_message(bot, author, title, description, link)
         while self.boris_messages:
             comment = self.boris_messages.pop()
             author = comment['user']['username']
             text = comment['text']
-            tasks.append(self.send_boris_message(bot, author, text))
-        return tasks
+            while self.boris_messages and self.boris_messages[-1]['user']['username'] == author:
+                comment = self.boris_messages.pop()
+                text += '\n++++++++++\n'
+                text += comment['text']
+            self.send_boris_message(bot, author, text)
 
 
 VAULT_URL = 'https://vault48.org'
