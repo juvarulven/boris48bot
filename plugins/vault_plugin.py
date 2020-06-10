@@ -1,6 +1,5 @@
 import sqlite3
 import requests
-import datetime
 from config import DATABASE
 
 
@@ -8,36 +7,41 @@ class Vault:
     def __init__(self, vault_url, api_port, database):
         self.vault_url = vault_url
         self.api_port = api_port
+        self.stats_api_url = '{}:{}/stats'.format(vault_url, api_port)
         self.flow_api_url = '{}:{}/node/diff'.format(vault_url, api_port)
         self.boris_api_url = '{}:{}/node/696/comment'.format(vault_url, api_port)
         self.flow_messages = []
         self.boris_messages = []
         self.subscribers = {'flow': [], 'boris': []}
         self.database = database
-        self.flow_last_update = None
-        self.boris_last_update = None
+        self.flow_timestamp = None
+        self.boris_timestamp = None
+        self.comments_count = None
+
         self.init_database()
 
     def init_database(self):
         conn = sqlite3.connect(self.database)
         cursor = conn.cursor()
-        cursor.execute('CREATE TABLE IF NOT EXISTS vault_last_update (flow TEXT, boris INTEGER)')
-        if cursor.execute('SELECT * FROM vault_last_update').fetchone() is None:
-            self.flow_last_update = datetime.datetime.utcnow().isoformat(sep='T', timespec='milliseconds') + 'Z'
-            params = {'take': 1,
-                      'skip': 0}
+        columns = ('flow_timestamp', 'boris_timestamp', 'comments_count')
+        cursor.execute('CREATE TABLE IF NOT EXISTS vault_last_updates ({} TEXT, {} TEXT, {} INTEGER)'.format(*columns))
+        last_updates = cursor.execute('SELECT * FROM vault_last_updates').fetchone()
+        if last_updates is None:
             status = 0
             response = None
             while status != 200:
-                response = requests.get(self.boris_api_url, params=params)
+                response = requests.get(self.stats_api_url)
                 status = response.status_code
-            response = response.json()['comments'][0]
-            self.boris_last_update = response['id']
-            cursor.execute('INSERT INTO vault_last_update VALUES("{}", {})'.format(self.flow_last_update,
-                                                                                   self.boris_last_update))
+            response = response.json()
+            self.flow_timestamp = response['timestamps']['flow_last_post']
+            self.boris_timestamp = response['timestamps']['boris_last_comment']
+            self.comments_count = response['comments']['total']
+            cursor.execute('INSERT INTO vault_last_updates VALUES("{}", "{}", {})'.format(self.flow_timestamp,
+                                                                                          self.boris_timestamp,
+                                                                                          self.comments_count))
         else:
-            last_updates = cursor.execute('SELECT * FROM vault_last_update').fetchone()
-            self.flow_last_update, self.boris_last_update = last_updates
+            last_updates = cursor.execute('SELECT * FROM vault_last_updates').fetchone()
+            self.flow_timestamp, self.boris_timestamp, self.comments_count = last_updates
         cursor.execute('CREATE TABLE IF NOT EXISTS flow_subscribers (id INTEGER)')
         cursor.execute('CREATE TABLE IF NOT EXISTS boris_subscribers (id INTEGER)')
         conn.commit()
@@ -51,7 +55,7 @@ class Vault:
             last_update = '"{}"'.format(last_update)
         conn = sqlite3.connect(self.database)
         cursor = conn.cursor()
-        cursor.execute('UPDATE vault_last_update SET {0} = {1} WHERE {0}'.format(column, last_update))
+        cursor.execute('UPDATE vault_last_updates SET {0} = {1} WHERE {0}'.format(column, last_update))
         conn.commit()
 
     def add_subscriber(self, target, telegram_id):
@@ -76,40 +80,49 @@ class Vault:
         else:
             return False
 
-    def update_flow(self):
-        params = {'start': self.flow_last_update,
-                  'end': self.flow_last_update,
+    def check_updates(self):
+        response = requests.get(self.stats_api_url)
+        if response.status_code != 200:
+            return
+        response = response.json()
+        flow_timestamp = response['timestamps']['flow_last_post']
+        boris_timestamp = response['timestamps']['boris_last_comment']
+        comments_count = response['comments']['total']
+        if flow_timestamp > self.flow_timestamp:
+            self.update_flow(flow_timestamp)
+        if boris_timestamp > self.boris_timestamp:
+            self.update_boris(boris_timestamp, comments_count)
+
+    def update_flow(self, timestamp):
+        params = {'start': self.flow_timestamp,
+                  'end': self.flow_timestamp,
                   'with_heroes': False,
                   'with_updated': False,
                   'with_recent': False,
                   'with_valid': False}
-        status = 0
-        response = None
-        while status != 200:
-            response = requests.get(self.flow_api_url, params=params)
-            status = response.status_code
+        response = requests.get(self.flow_api_url, params=params)
+        if response.status_code != 200:
+            return
+        self.flow_timestamp = timestamp
         self.flow_messages = response.json()['before']
-        if self.flow_messages:
-            self.flow_last_update = datetime.datetime.utcnow().isoformat(timespec='milliseconds') + 'Z'
-            self.update_database('flow', self.flow_last_update)
+        self.update_database('flow_timestamp', timestamp)
 
-    def update_boris(self):
-        params = {'take': 25,
+    def update_boris(self, timestamp, comments_count):
+        params = {'take': comments_count - self.comments_count + 10,
                   'skip': 0}
-        status = 0
-        response = None
-        while status != 200:
-            response = requests.get(self.boris_api_url, params=params)
-            status = response.status_code
+        response = requests.get(self.boris_api_url, params=params)
+        if response.status_code != 200:
+            return
         response = response.json()['comments']
-        response.reverse()
-        comment = response.pop()
-        while comment['id'] > self.boris_last_update:
-            self.boris_messages.append(comment)
-            comment = response.pop()
-        if self.boris_messages:
-            self.boris_last_update = self.boris_messages[0]['id']
-            self.update_database('boris', self.boris_last_update)
+        for comment in response:
+            if comment['created_at'] > timestamp:
+                self.boris_messages.append(comment)
+            else:
+                break
+        self.boris_timestamp = timestamp
+        self.comments_count = comments_count
+        self.update_database('boris_timestamp', timestamp)
+        self.update_database('comments_count', comments_count)
 
     def subscribe_flow(self, bot, message):
         telegram_id = message.from_user.id
@@ -187,8 +200,7 @@ class Vault:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
     def scheduled(self, bot):
-        self.update_flow()
-        self.update_boris()
+        self.check_updates()
         while self.flow_messages:
             post = self.flow_messages.pop()
             author = post['user']['username']
