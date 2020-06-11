@@ -7,6 +7,7 @@ from telebot import TeleBot
 class Bot(TeleBot):
     def __init__(self, token):
         super().__init__(token)
+        self.database_lock = False
 
     def message_handler_method(self, handler, commands=None, regexp=None, func=None, content_types=None, **kwargs):
         """

@@ -20,12 +20,24 @@ class Vault:
 
         self.init_database()
 
+    def database_request(self, request, save=False):
+        connect = sqlite3.connect(self.database)
+        cursor = connect.cursor()
+        if save:
+            cursor.execute(request)
+            connect.commit()
+            answer = None
+        else:
+            answer = cursor.execute(request)
+        connect.close()
+        return answer
+
     def init_database(self):
-        conn = sqlite3.connect(self.database)
-        cursor = conn.cursor()
         columns = ('flow_timestamp', 'boris_timestamp', 'comments_count')
-        cursor.execute('CREATE TABLE IF NOT EXISTS vault_last_updates ({} TEXT, {} TEXT, {} INTEGER)'.format(*columns))
-        last_updates = cursor.execute('SELECT * FROM vault_last_updates').fetchone()
+        db_request = 'CREATE TABLE IF NOT EXISTS vault_last_updates ({} TEXT, {} TEXT, {} INTEGER)'.format(*columns)
+        self.database_request(db_request, save=True)
+        db_request = 'SELECT * FROM vault_last_updates'
+        last_updates = self.database_request(db_request).fetchone()
         if last_updates is None:
             status = 0
             response = None
@@ -40,11 +52,9 @@ class Vault:
                                                                                           self.boris_timestamp,
                                                                                           self.comments_count))
         else:
-            last_updates = cursor.execute('SELECT * FROM vault_last_updates').fetchone()
             self.flow_timestamp, self.boris_timestamp, self.comments_count = last_updates
         cursor.execute('CREATE TABLE IF NOT EXISTS flow_subscribers (id INTEGER)')
         cursor.execute('CREATE TABLE IF NOT EXISTS boris_subscribers (id INTEGER)')
-        conn.commit()
         raw_subscribers = cursor.execute('SELECT id FROM flow_subscribers').fetchall()
         self.subscribers['flow'] = list(map(lambda x: x[0], raw_subscribers))
         raw_subscribers = cursor.execute('SELECT id FROM boris_subscribers').fetchall()
