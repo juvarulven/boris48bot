@@ -1,6 +1,6 @@
 import sqlite3
 import requests
-from config import DATABASE
+from config import DATABASE, VAULT_URL, VAULT_API_PORT
 
 
 class Vault:
@@ -165,45 +165,49 @@ class Vault:
             bot.send_message(telegram_id, 'Вы не были подписаны на Бориса')
 
     def __send_image_message(self, bot, author, title, description, link):
-        template = 'Скрывающийся под псевдонимом _~{}_ поделился фото в Течении:' \
-                   '\n\n*{}*\nи написал:\n{}\n{}'
+        template = '*Скрывающийся под псевдонимом _~{}_ поделился фото в Течении:*' \
+                   '\n\n{}\nи написал:\n{}\n{}'
         message = template.format(author, title, description, link)
         for addressee in self.subscribers['flow']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
     def __send_text_message(self, bot, author, title, description, link):
-        template = 'Скрывающийся под псевдонимом _~{}_ поделился мыслями в Течении:' \
-                   '\n\n*{}*\n{}\n{}'
+        template = '*Скрывающийся под псевдонимом _~{}_ поделился мыслями в Течении:*' \
+                   '\n\n{}\n{}\n{}'
         message = template.format(author, title, description, link)
         for addressee in self.subscribers['flow']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
     def __send_audio_message(self, bot, author, title, description, link):
-        template = 'Скрывающийся под псевдонимом _~{}_ поделился аудиозаписью в Течении:' \
-                   '\n\n*{}*\nи написал:\n{}\n{}'
+        template = '*Скрывающийся под псевдонимом _~{}_ поделился аудиозаписью в Течении:*' \
+                   '\n\n{}\nи написал:\n{}\n{}'
         message = template.format(author, title, description, link)
         for addressee in self.subscribers['flow']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
     def __send_video_message(self, bot, author, title, description, link):
-        template = 'Скрывающийся под псевдонимом _~{}_ поделился видеозаписью в Течении:' \
-                   '\n\n*{}*\nи написал:\n{}\n{}'
+        template = '*Скрывающийся под псевдонимом _~{}_ поделился видеозаписью в Течении:*' \
+                   '\n\n{}\nи написал:\n{}\n{}'
         message = template.format(author, title, description, link)
         for addressee in self.subscribers['flow']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
     def __send_other_message(self, bot, author, title, description, link):
-        template = 'Скрывающийся под псевдонимом _~{}_ поделился чем-то неординарным в Течении:' \
-                   '\n\n*{}*\nи написал:\n{}\n{}'
+        template = '*Скрывающийся под псевдонимом _~{}_ поделился чем-то неординарным в Течении:*' \
+                   '\n\n{}\nи написал:\n{}\n{}'
         message = template.format(author, title, description, link)
         for addressee in self.subscribers['flow']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
-    def __send_boris_message(self, bot, author, comment):
-        template = 'Скрывающийся под псевдонимом _~{}_ вот что пишет Борису:' \
-                   '\n\n{}\n{}'
+    def __send_boris_message(self, bot, author, comment, with_files):
+        template = '*Скрывающийся под псевдонимом _~{}_ вот что пишет Борису:*' \
+                   '\n\n{}{}\n{}'
         link = 'https://vault48.org/boris'
-        message = template.format(author, comment, link)
+        if with_files:
+            with_files = '\n\n*Да вдобавок прикрепляет какие-то прикрепления!*'
+        else:
+            with_files = ''
+        message = template.format(author, comment, with_files, link)
         for addressee in self.subscribers['boris']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
@@ -227,19 +231,21 @@ class Vault:
             if content_type == 'other':
                 self.__send_other_message(bot, author, title, description, link)
         while self.boris_messages:
+            with_files = False
             comment = self.boris_messages.pop()
             author = comment['user']['username']
             text = comment['text']
+            if comment['files']:
+                with_files = True
             while self.boris_messages and self.boris_messages[-1]['user']['username'] == author:
                 comment = self.boris_messages.pop()
                 text += '\n++++++++++\n'
                 text += comment['text']
-            self.__send_boris_message(bot, author, text)
+                if comment['files']:
+                    with_files = True
+            self.__send_boris_message(bot, author, text, with_files)
 
 
-VAULT_URL = 'https://vault48.org'
-VAULT_PORT = 3333
-
-vault = Vault(VAULT_URL, VAULT_PORT, DATABASE)
+vault = Vault(VAULT_URL, VAULT_API_PORT, DATABASE)
 
 __all__ = ['vault']

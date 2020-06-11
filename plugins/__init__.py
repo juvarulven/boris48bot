@@ -49,6 +49,6 @@ command_handlers = [{'commands': ['start'], 'handler': help_plugin.start_message
                     {'commands': ['unsubflow'], 'handler': vault_plugin.vault.unsubscribe_flow},
                     {'commands': ['unsubboris'], 'handler': vault_plugin.vault.unsubscribe_boris}]
 
-scheduled_handlers = [{'handler': vault_plugin.vault.scheduled, 'minutes': 10}]
+scheduled_handlers = [{'handler': vault_plugin.vault.scheduled, 'minutes': 1}]
 
 __all__ = ['command_handlers', 'scheduled_handlers']
