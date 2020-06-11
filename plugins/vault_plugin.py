@@ -18,9 +18,9 @@ class Vault:
         self.boris_timestamp = None
         self.comments_count = None
 
-        self.init_database()
+        self.__init_database()
 
-    def database_request(self, request, save=False):
+    def __database_request(self, request, save=False):
         connect = sqlite3.connect(self.database)
         cursor = connect.cursor()
         if save:
@@ -32,12 +32,12 @@ class Vault:
         connect.close()
         return answer
 
-    def init_database(self):
+    def __init_database(self):
         columns = ('flow_timestamp', 'boris_timestamp', 'comments_count')
         db_request = 'CREATE TABLE IF NOT EXISTS vault_last_updates ({} TEXT, {} TEXT, {} INTEGER)'.format(*columns)
-        self.database_request(db_request, save=True)
+        self.__database_request(db_request, save=True)
         db_request = 'SELECT * FROM vault_last_updates'
-        last_updates = self.database_request(db_request).fetchone()
+        last_updates = self.__database_request(db_request).fetchone()
         if last_updates is None:
             status = 0
             response = None
@@ -48,49 +48,47 @@ class Vault:
             self.flow_timestamp = response['timestamps']['flow_last_post']
             self.boris_timestamp = response['timestamps']['boris_last_comment']
             self.comments_count = response['comments']['total']
-            cursor.execute('INSERT INTO vault_last_updates VALUES("{}", "{}", {})'.format(self.flow_timestamp,
-                                                                                          self.boris_timestamp,
-                                                                                          self.comments_count))
+            db_request = 'INSERT INTO vault_last_updates VALUES("{}", "{}", {})'
+            db_request = db_request.format(self.flow_timestamp, self.boris_timestamp, self.comments_count)
+            self.__database_request(db_request, save=True)
         else:
             self.flow_timestamp, self.boris_timestamp, self.comments_count = last_updates
-        cursor.execute('CREATE TABLE IF NOT EXISTS flow_subscribers (id INTEGER)')
-        cursor.execute('CREATE TABLE IF NOT EXISTS boris_subscribers (id INTEGER)')
-        raw_subscribers = cursor.execute('SELECT id FROM flow_subscribers').fetchall()
+        db_request = 'CREATE TABLE IF NOT EXISTS flow_subscribers (id INTEGER)'
+        self.__database_request(db_request, save=True)
+        db_request = 'CREATE TABLE IF NOT EXISTS boris_subscribers (id INTEGER)'
+        self.__database_request(db_request, save=True)
+        db_request = 'SELECT id FROM flow_subscribers'
+        raw_subscribers = self.__database_request(db_request).fetchall()
         self.subscribers['flow'] = list(map(lambda x: x[0], raw_subscribers))
-        raw_subscribers = cursor.execute('SELECT id FROM boris_subscribers').fetchall()
+        db_request = 'SELECT id FROM boris_subscribers'
+        raw_subscribers = self.__database_request(db_request).fetchall()
         self.subscribers['boris'] = list(map(lambda x: x[0], raw_subscribers))
 
-    def update_database(self, column, last_update):
+    def __update_database(self, column, last_update):
         if isinstance(last_update, str):
             last_update = '"{}"'.format(last_update)
-        conn = sqlite3.connect(self.database)
-        cursor = conn.cursor()
-        cursor.execute('UPDATE vault_last_updates SET {0} = {1} WHERE {0}'.format(column, last_update))
-        conn.commit()
+        db_request = 'UPDATE vault_last_updates SET {0} = {1} WHERE {0}'.format(column, last_update)
+        self.__database_request(db_request, save=True)
 
-    def add_subscriber(self, target, telegram_id):
+    def __add_subscriber(self, target, telegram_id):
         if telegram_id not in self.subscribers[target]:
             self.subscribers[target].append(telegram_id)
-            conn = sqlite3.connect(self.database)
-            cursor = conn.cursor()
-            cursor.execute('INSERT INTO {}_subscribers VALUES({})'.format(target, telegram_id))
-            conn.commit()
+            db_request = 'INSERT INTO {}_subscribers VALUES({})'.format(target, telegram_id)
+            self.__database_request(db_request, save=True)
             return True
         else:
             return False
 
-    def delete_subscriber(self, target, telegram_id):
+    def __delete_subscriber(self, target, telegram_id):
         if telegram_id in self.subscribers[target]:
             self.subscribers[target].remove(telegram_id)
-            conn = sqlite3.connect(self.database)
-            cursor = conn.cursor()
-            cursor.execute('DELETE FROM {}_subscribers WHERE id={}'.format(target, telegram_id))
-            conn.commit()
+            db_request = 'DELETE FROM {}_subscribers WHERE id={}'.format(target, telegram_id)
+            self.__database_request(db_request, save=True)
             return True
         else:
             return False
 
-    def check_updates(self):
+    def __check_updates(self):
         response = requests.get(self.stats_api_url)
         if response.status_code != 200:
             return
@@ -99,11 +97,11 @@ class Vault:
         boris_timestamp = response['timestamps']['boris_last_comment']
         comments_count = response['comments']['total']
         if flow_timestamp > self.flow_timestamp:
-            self.update_flow(flow_timestamp)
+            self.__update_flow(flow_timestamp)
         if boris_timestamp > self.boris_timestamp:
-            self.update_boris(boris_timestamp, comments_count)
+            self.__update_boris(boris_timestamp, comments_count)
 
-    def update_flow(self, timestamp):
+    def __update_flow(self, timestamp):
         params = {'start': self.flow_timestamp,
                   'end': self.flow_timestamp,
                   'with_heroes': False,
@@ -115,9 +113,9 @@ class Vault:
             return
         self.flow_timestamp = timestamp
         self.flow_messages = response.json()['before']
-        self.update_database('flow_timestamp', timestamp)
+        self.__update_database('flow_timestamp', timestamp)
 
-    def update_boris(self, timestamp, comments_count):
+    def __update_boris(self, timestamp, comments_count):
         params = {'take': comments_count - self.comments_count + 10,
                   'skip': 0}
         response = requests.get(self.boris_api_url, params=params)
@@ -131,12 +129,12 @@ class Vault:
                 break
         self.boris_timestamp = timestamp
         self.comments_count = comments_count
-        self.update_database('boris_timestamp', timestamp)
-        self.update_database('comments_count', comments_count)
+        self.__update_database('boris_timestamp', timestamp)
+        self.__update_database('comments_count', comments_count)
 
     def subscribe_flow(self, bot, message):
         telegram_id = message.from_user.id
-        added_subscriber = self.add_subscriber('flow', telegram_id)
+        added_subscriber = self.__add_subscriber('flow', telegram_id)
         if added_subscriber:
             bot.send_message(telegram_id, 'Теперь вы будете получать обновления Течения')
         else:
@@ -144,7 +142,7 @@ class Vault:
 
     def subscribe_boris(self, bot, message):
         telegram_id = message.from_user.id
-        added_subscriber = self.add_subscriber('boris', telegram_id)
+        added_subscriber = self.__add_subscriber('boris', telegram_id)
         if added_subscriber:
             bot.send_message(telegram_id, 'Теперь вы будете получать обновления Бориса')
         else:
@@ -152,7 +150,7 @@ class Vault:
 
     def unsubscribe_flow(self, bot, message):
         telegram_id = message.from_user.id
-        added_subscriber = self.delete_subscriber('flow', telegram_id)
+        added_subscriber = self.__delete_subscriber('flow', telegram_id)
         if added_subscriber:
             bot.send_message(telegram_id, 'Вы больше не будете получать обновления Течения')
         else:
@@ -160,48 +158,48 @@ class Vault:
 
     def unsubscribe_boris(self, bot, message):
         telegram_id = message.from_user.id
-        added_subscriber = self.delete_subscriber('boris', telegram_id)
+        added_subscriber = self.__delete_subscriber('boris', telegram_id)
         if added_subscriber:
             bot.send_message(telegram_id, 'Вы больше не будете получать обновления Бориса')
         else:
             bot.send_message(telegram_id, 'Вы не были подписаны на Бориса')
 
-    def send_image_message(self, bot, author, title, description, link):
+    def __send_image_message(self, bot, author, title, description, link):
         template = 'Скрывающийся под псевдонимом _~{}_ поделился фото в Течении:' \
                    '\n\n*{}*\nи написал:\n{}\n{}'
         message = template.format(author, title, description, link)
         for addressee in self.subscribers['flow']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
-    def send_text_message(self, bot, author, title, description, link):
+    def __send_text_message(self, bot, author, title, description, link):
         template = 'Скрывающийся под псевдонимом _~{}_ поделился мыслями в Течении:' \
                    '\n\n*{}*\n{}\n{}'
         message = template.format(author, title, description, link)
         for addressee in self.subscribers['flow']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
-    def send_audio_message(self, bot, author, title, description, link):
+    def __send_audio_message(self, bot, author, title, description, link):
         template = 'Скрывающийся под псевдонимом _~{}_ поделился аудиозаписью в Течении:' \
                    '\n\n*{}*\nи написал:\n{}\n{}'
         message = template.format(author, title, description, link)
         for addressee in self.subscribers['flow']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
-    def send_video_message(self, bot, author, title, description, link):
+    def __send_video_message(self, bot, author, title, description, link):
         template = 'Скрывающийся под псевдонимом _~{}_ поделился видеозаписью в Течении:' \
                    '\n\n*{}*\nи написал:\n{}\n{}'
         message = template.format(author, title, description, link)
         for addressee in self.subscribers['flow']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
-    def send_other_message(self, bot, author, title, description, link):
+    def __send_other_message(self, bot, author, title, description, link):
         template = 'Скрывающийся под псевдонимом _~{}_ поделился чем-то неординарным в Течении:' \
                    '\n\n*{}*\nи написал:\n{}\n{}'
         message = template.format(author, title, description, link)
         for addressee in self.subscribers['flow']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
-    def send_boris_message(self, bot, author, comment):
+    def __send_boris_message(self, bot, author, comment):
         template = 'Скрывающийся под псевдонимом _~{}_ вот что пишет Борису:' \
                    '\n\n{}\n{}'
         link = 'https://vault48.org/boris'
@@ -210,7 +208,7 @@ class Vault:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
     def scheduled(self, bot):
-        self.check_updates()
+        self.__check_updates()
         while self.flow_messages:
             post = self.flow_messages.pop()
             author = post['user']['username']
@@ -219,15 +217,15 @@ class Vault:
             link = 'https://{}/post{}'.format(self.vault_url, post['id'])
             content_type = post['type']
             if content_type == 'image':
-                self.send_image_message(bot, author, title, description, link)
+                self.__send_image_message(bot, author, title, description, link)
             if content_type == 'text':
-                self.send_text_message(bot, author, title, description, link)
+                self.__send_text_message(bot, author, title, description, link)
             if content_type == 'audio':
-                self.send_audio_message(bot, author, title, description, link)
+                self.__send_audio_message(bot, author, title, description, link)
             if content_type == 'video':
-                self.send_video_message(bot, author, title, description, link)
+                self.__send_video_message(bot, author, title, description, link)
             if content_type == 'other':
-                self.send_other_message(bot, author, title, description, link)
+                self.__send_other_message(bot, author, title, description, link)
         while self.boris_messages:
             comment = self.boris_messages.pop()
             author = comment['user']['username']
@@ -236,7 +234,7 @@ class Vault:
                 comment = self.boris_messages.pop()
                 text += '\n++++++++++\n'
                 text += comment['text']
-            self.send_boris_message(bot, author, text)
+            self.__send_boris_message(bot, author, text)
 
 
 VAULT_URL = 'https://vault48.org'
