@@ -28,7 +28,7 @@ class Vault:
             connect.commit()
             answer = None
         else:
-            answer = cursor.execute(request)
+            answer = cursor.execute(request).fetchall()
         connect.close()
         return answer
 
@@ -37,8 +37,8 @@ class Vault:
         db_request = 'CREATE TABLE IF NOT EXISTS vault_last_updates ({} TEXT, {} TEXT, {} INTEGER)'.format(*columns)
         self.__database_request(db_request, save=True)
         db_request = 'SELECT * FROM vault_last_updates'
-        last_updates = self.__database_request(db_request).fetchone()
-        if last_updates is None:
+        last_updates = self.__database_request(db_request)
+        if not last_updates:
             status = 0
             response = None
             while status != 200:
@@ -52,16 +52,16 @@ class Vault:
             db_request = db_request.format(self.flow_timestamp, self.boris_timestamp, self.comments_count)
             self.__database_request(db_request, save=True)
         else:
-            self.flow_timestamp, self.boris_timestamp, self.comments_count = last_updates
+            self.flow_timestamp, self.boris_timestamp, self.comments_count = last_updates[0]
         db_request = 'CREATE TABLE IF NOT EXISTS flow_subscribers (id INTEGER)'
         self.__database_request(db_request, save=True)
         db_request = 'CREATE TABLE IF NOT EXISTS boris_subscribers (id INTEGER)'
         self.__database_request(db_request, save=True)
         db_request = 'SELECT id FROM flow_subscribers'
-        raw_subscribers = self.__database_request(db_request).fetchall()
+        raw_subscribers = self.__database_request(db_request)
         self.subscribers['flow'] = list(map(lambda x: x[0], raw_subscribers))
         db_request = 'SELECT id FROM boris_subscribers'
-        raw_subscribers = self.__database_request(db_request).fetchall()
+        raw_subscribers = self.__database_request(db_request)
         self.subscribers['boris'] = list(map(lambda x: x[0], raw_subscribers))
 
     def __update_database(self, column, last_update):
@@ -123,7 +123,7 @@ class Vault:
             return
         response = response.json()['comments']
         for comment in response:
-            if comment['created_at'] > timestamp:
+            if comment['created_at'] > self.boris_timestamp:
                 self.boris_messages.append(comment)
             else:
                 break
@@ -165,46 +165,46 @@ class Vault:
             bot.send_message(telegram_id, 'Вы не были подписаны на Бориса')
 
     def __send_image_message(self, bot, author, title, description, link):
-        template = '*Скрывающийся под псевдонимом _~{}_ поделился фото в Течении:*' \
-                   '\n\n{}\nи написал:\n{}\n{}'
+        template = '_Скрывающийся под псевдонимом_ *~{}* _поделился фото в Течении:_' \
+                   '\n*{}*\n_и написал:_\n{}\n{}'
         message = template.format(author, title, description, link)
         for addressee in self.subscribers['flow']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
     def __send_text_message(self, bot, author, title, description, link):
-        template = '*Скрывающийся под псевдонимом _~{}_ поделился мыслями в Течении:*' \
-                   '\n\n{}\n{}\n{}'
+        template = '_Скрывающийся под псевдонимом_ *~{}* _поделился мыслями в Течении:_' \
+                   '\n*{}*\n{}\n{}'
         message = template.format(author, title, description, link)
         for addressee in self.subscribers['flow']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
     def __send_audio_message(self, bot, author, title, description, link):
-        template = '*Скрывающийся под псевдонимом _~{}_ поделился аудиозаписью в Течении:*' \
-                   '\n\n{}\nи написал:\n{}\n{}'
+        template = '_Скрывающийся под псевдонимом_ *~{}* _поделился аудиозаписью в Течении:_' \
+                   '\n*{}*\n_и написал:_\n{}\n{}'
         message = template.format(author, title, description, link)
         for addressee in self.subscribers['flow']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
     def __send_video_message(self, bot, author, title, description, link):
-        template = '*Скрывающийся под псевдонимом _~{}_ поделился видеозаписью в Течении:*' \
-                   '\n\n{}\nи написал:\n{}\n{}'
+        template = '_Скрывающийся под псевдонимом_ *~{}* _поделился видеозаписью в Течении:_' \
+                   '\n*{}*\n_и написал:_\n{}\n{}'
         message = template.format(author, title, description, link)
         for addressee in self.subscribers['flow']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
     def __send_other_message(self, bot, author, title, description, link):
-        template = '*Скрывающийся под псевдонимом _~{}_ поделился чем-то неординарным в Течении:*' \
-                   '\n\n{}\nи написал:\n{}\n{}'
+        template = '_Скрывающийся под псевдонимом_ *~{}* _поделился чем-то неординарным в Течении:_' \
+                   '\n*{}*\n_и написал:_\n{}\n{}'
         message = template.format(author, title, description, link)
         for addressee in self.subscribers['flow']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
     def __send_boris_message(self, bot, author, comment, with_files):
-        template = '*Скрывающийся под псевдонимом _~{}_ вот что пишет Борису:*' \
-                   '\n\n{}{}\n{}'
+        template = '_Скрывающийся под псевдонимом_ *~{}* _вот что пишет Борису:_' \
+                   '\n{}{}\n{}'
         link = 'https://vault48.org/boris'
         if with_files:
-            with_files = '\n\n*Да вдобавок прикрепляет какие-то прикрепления!*'
+            with_files = '\n\n_да вдобавок прикрепляет какие-то прикрепления!_'
         else:
             with_files = ''
         message = template.format(author, comment, with_files, link)
@@ -239,7 +239,7 @@ class Vault:
                 with_files = True
             while self.boris_messages and self.boris_messages[-1]['user']['username'] == author:
                 comment = self.boris_messages.pop()
-                text += '\n++++++++++\n'
+                text += '\n_и продолжает:_\n'
                 text += comment['text']
                 if comment['files']:
                     with_files = True
