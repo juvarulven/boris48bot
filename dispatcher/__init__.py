@@ -1,7 +1,7 @@
 """
 Модуль диспетчера с классом Dispatcher -- загружает плагины и рулит планировщиком
 """
-from typing import Optional, List, Union
+from typing import Optional, List
 from telegram import Bot
 from threading import Thread
 from datetime import datetime, timedelta
