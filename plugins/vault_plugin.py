@@ -1,10 +1,10 @@
-import sqlite3
+import database as db
 import requests
-from config import DATABASE, VAULT_URL, VAULT_API_PORT
+from config import VAULT_URL, VAULT_API_PORT
 
 
 class Vault:
-    def __init__(self, vault_url, api_port, database):
+    def __init__(self, vault_url, api_port):
         self.vault_url = vault_url
         self.api_port = api_port
         self.stats_api_url = '{}:{}/stats'.format(vault_url, api_port)
@@ -13,31 +13,16 @@ class Vault:
         self.flow_messages = []
         self.boris_messages = []
         self.subscribers = {'flow': [], 'boris': []}
-        self.database = database
+        self.database_updates_table = 'vault_last_updates'
         self.flow_timestamp = None
         self.boris_timestamp = None
         self.comments_count = None
 
         self.__init_database()
 
-    def __database_request(self, request, save=False):
-        connect = sqlite3.connect(self.database)
-        cursor = connect.cursor()
-        if save:
-            cursor.execute(request)
-            connect.commit()
-            answer = None
-        else:
-            answer = cursor.execute(request).fetchall()
-        connect.close()
-        return answer
-
     def __init_database(self):
-        columns = ('flow_timestamp', 'boris_timestamp', 'comments_count')
-        db_request = 'CREATE TABLE IF NOT EXISTS vault_last_updates ({} TEXT, {} TEXT, {} INTEGER)'.format(*columns)
-        self.__database_request(db_request, save=True)
-        db_request = 'SELECT * FROM vault_last_updates'
-        last_updates = self.__database_request(db_request)
+        db.create_table(self.database_updates_table, flow_timestamp='', boris_timestamp='', comments_count=0)
+        last_updates = db.select(self.database_updates_table)
         if not last_updates:
             status = 0
             response = None
@@ -48,33 +33,27 @@ class Vault:
             self.flow_timestamp = response['timestamps']['flow_last_post']
             self.boris_timestamp = response['timestamps']['boris_last_comment']
             self.comments_count = response['comments']['total']
-            db_request = 'INSERT INTO vault_last_updates VALUES("{}", "{}", {})'
-            db_request = db_request.format(self.flow_timestamp, self.boris_timestamp, self.comments_count)
-            self.__database_request(db_request, save=True)
+            db.insert(self.database_updates_table, 0, flow_timestamp=self.flow_messages,
+                      boris_timestamp=self.boris_timestamp, comments_count=self.comments_count)
         else:
             self.flow_timestamp, self.boris_timestamp, self.comments_count = last_updates[0]
-        db_request = 'CREATE TABLE IF NOT EXISTS flow_subscribers (id INTEGER)'
-        self.__database_request(db_request, save=True)
-        db_request = 'CREATE TABLE IF NOT EXISTS boris_subscribers (id INTEGER)'
-        self.__database_request(db_request, save=True)
-        db_request = 'SELECT id FROM flow_subscribers'
-        raw_subscribers = self.__database_request(db_request)
+        db.add_column('users', 'vault_flow_subscriber')
+        db.add_column('users', 'vault_boris_subscriber')
+        raw_subscribers = db.select('users', 'id', condition='vault_flow_subscriber = 1')
         self.subscribers['flow'] = list(map(lambda x: x[0], raw_subscribers))
-        db_request = 'SELECT id FROM boris_subscribers'
-        raw_subscribers = self.__database_request(db_request)
+        raw_subscribers = db.select('users', 'id', condition='vault_boris_subscriber = 1')
         self.subscribers['boris'] = list(map(lambda x: x[0], raw_subscribers))
-
-    def __update_database(self, column, last_update):
-        if isinstance(last_update, str):
-            last_update = '"{}"'.format(last_update)
-        db_request = 'UPDATE vault_last_updates SET {0} = {1} WHERE {0}'.format(column, last_update)
-        self.__database_request(db_request, save=True)
 
     def __add_subscriber(self, target, telegram_id):
         if telegram_id not in self.subscribers[target]:
             self.subscribers[target].append(telegram_id)
-            db_request = 'INSERT INTO {}_subscribers VALUES({})'.format(target, telegram_id)
-            self.__database_request(db_request, save=True)
+            condition = 'id = {}'.format(telegram_id)
+            if target == 'flow':
+                db.update('users', condition, vault_flow_subscriber=1)
+            elif target == 'boris':
+                db.update('users', condition, vault_boris_subscriber=1)
+            else:
+                raise AssertionError('target может быть либо "flow", либо "boris"')
             return True
         else:
             return False
@@ -82,8 +61,13 @@ class Vault:
     def __delete_subscriber(self, target, telegram_id):
         if telegram_id in self.subscribers[target]:
             self.subscribers[target].remove(telegram_id)
-            db_request = 'DELETE FROM {}_subscribers WHERE id={}'.format(target, telegram_id)
-            self.__database_request(db_request, save=True)
+            condition = 'id = {}'.format(telegram_id)
+            if target == 'flow':
+                db.update('users', condition, vault_flow_subscriber=0)
+            elif target == 'boris':
+                db.update('users', condition, vault_boris_subscriber=0)
+            else:
+                raise AssertionError('target может быть либо "flow", либо "boris"')
             return True
         else:
             return False
@@ -113,7 +97,7 @@ class Vault:
             return
         self.flow_timestamp = timestamp
         self.flow_messages = response.json()['before']
-        self.__update_database('flow_timestamp', timestamp)
+        db.update(self.database_updates_table, 'id = 0', flow_timestamp=timestamp)
 
     def __update_boris(self, timestamp, comments_count):
         params = {'take': comments_count - self.comments_count + 10,
@@ -129,8 +113,7 @@ class Vault:
                 break
         self.boris_timestamp = timestamp
         self.comments_count = comments_count
-        self.__update_database('boris_timestamp', timestamp)
-        self.__update_database('comments_count', comments_count)
+        db.update(self.database_updates_table, 'id = 0', boris_timestamp=timestamp, comments_count=comments_count)
 
     def subscribe_flow(self, bot, message):
         telegram_id = message.from_user.id
@@ -246,6 +229,6 @@ class Vault:
             self.__send_boris_message(bot, author, text, with_files)
 
 
-vault = Vault(VAULT_URL, VAULT_API_PORT, DATABASE)
+vault = Vault(VAULT_URL, VAULT_API_PORT)
 
 __all__ = ['vault']
