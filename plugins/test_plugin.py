@@ -1,7 +1,7 @@
 """
 Плагин тестирования
 """
-from config import ADMIN_ID
+from config import BOT_OWNER_ID
 
 
 def test_simple(bot, message):
@@ -11,7 +11,7 @@ def test_simple(bot, message):
 
 def test_scheduled(bot):
     print('sending scheduled test message')
-    bot.send_message(ADMIN_ID, 'Scheduled test work')
+    bot.send_message(BOT_OWNER_ID, 'Scheduled test work')
 
 
 __all__ = ['test_simple', 'test_scheduled']

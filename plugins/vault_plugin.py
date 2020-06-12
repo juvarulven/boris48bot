@@ -5,48 +5,48 @@ from config import VAULT_URL, VAULT_API_PORT
 
 class Vault:
     def __init__(self, vault_url, api_port):
-        self.vault_url = vault_url
-        self.api_port = api_port
-        self.stats_api_url = '{}:{}/stats'.format(vault_url, api_port)
-        self.flow_api_url = '{}:{}/node/diff'.format(vault_url, api_port)
-        self.boris_api_url = '{}:{}/node/696/comment'.format(vault_url, api_port)
-        self.flow_messages = []
-        self.boris_messages = []
-        self.subscribers = {'flow': [], 'boris': []}
-        self.database_updates_table = 'vault_last_updates'
-        self.flow_timestamp = None
-        self.boris_timestamp = None
-        self.comments_count = None
+        self.__vault_url = vault_url
+        self.__api_port = api_port
+        self.__stats_api_url = '{}:{}/stats'.format(vault_url, api_port)
+        self.__flow_api_url = '{}:{}/node/diff'.format(vault_url, api_port)
+        self.__boris_api_url = '{}:{}/node/696/comment'.format(vault_url, api_port)
+        self.__flow_messages = []
+        self.__boris_messages = []
+        self.__subscribers = {'flow': [], 'boris': []}
+        self.__database_updates_table = 'vault_last_updates'
+        self.__flow_timestamp = None
+        self.__boris_timestamp = None
+        self.__comments_count = None
 
         self.__init_database()
 
     def __init_database(self):
-        db.create_table(self.database_updates_table, flow_timestamp='', boris_timestamp='', comments_count=0)
-        last_updates = db.select(self.database_updates_table)
+        db.create_table(self.__database_updates_table, flow_timestamp='', boris_timestamp='', comments_count=0)
+        last_updates = db.select(self.__database_updates_table)
         if not last_updates:
             status = 0
             response = None
             while status != 200:
-                response = requests.get(self.stats_api_url)
+                response = requests.get(self.__stats_api_url)
                 status = response.status_code
             response = response.json()
-            self.flow_timestamp = response['timestamps']['flow_last_post']
-            self.boris_timestamp = response['timestamps']['boris_last_comment']
-            self.comments_count = response['comments']['total']
-            db.insert(self.database_updates_table, 0, flow_timestamp=self.flow_messages,
-                      boris_timestamp=self.boris_timestamp, comments_count=self.comments_count)
+            self.__flow_timestamp = response['timestamps']['flow_last_post']
+            self.__boris_timestamp = response['timestamps']['boris_last_comment']
+            self.__comments_count = response['comments']['total']
+            db.insert(self.__database_updates_table, 0, flow_timestamp=self.__flow_timestamp,
+                      boris_timestamp=self.__boris_timestamp, comments_count=self.__comments_count)
         else:
-            self.flow_timestamp, self.boris_timestamp, self.comments_count = last_updates[0]
-        db.add_column('users', 'vault_flow_subscriber')
-        db.add_column('users', 'vault_boris_subscriber')
+            self.__flow_timestamp, self.__boris_timestamp, self.__comments_count = last_updates[0]
+        db.add_column('users', 'vault_flow_subscriber', default=0)
+        db.add_column('users', 'vault_boris_subscriber', default=0)
         raw_subscribers = db.select('users', 'id', condition='vault_flow_subscriber = 1')
-        self.subscribers['flow'] = list(map(lambda x: x[0], raw_subscribers))
+        self.__subscribers['flow'] = list(map(lambda x: x[0], raw_subscribers))
         raw_subscribers = db.select('users', 'id', condition='vault_boris_subscriber = 1')
-        self.subscribers['boris'] = list(map(lambda x: x[0], raw_subscribers))
+        self.__subscribers['boris'] = list(map(lambda x: x[0], raw_subscribers))
 
     def __add_subscriber(self, target, telegram_id):
-        if telegram_id not in self.subscribers[target]:
-            self.subscribers[target].append(telegram_id)
+        if telegram_id not in self.__subscribers[target]:
+            self.__subscribers[target].append(telegram_id)
             condition = 'id = {}'.format(telegram_id)
             if target == 'flow':
                 db.update('users', condition, vault_flow_subscriber=1)
@@ -59,8 +59,8 @@ class Vault:
             return False
 
     def __delete_subscriber(self, target, telegram_id):
-        if telegram_id in self.subscribers[target]:
-            self.subscribers[target].remove(telegram_id)
+        if telegram_id in self.__subscribers[target]:
+            self.__subscribers[target].remove(telegram_id)
             condition = 'id = {}'.format(telegram_id)
             if target == 'flow':
                 db.update('users', condition, vault_flow_subscriber=0)
@@ -73,47 +73,47 @@ class Vault:
             return False
 
     def __check_updates(self):
-        response = requests.get(self.stats_api_url)
+        response = requests.get(self.__stats_api_url)
         if response.status_code != 200:
             return
         response = response.json()
         flow_timestamp = response['timestamps']['flow_last_post']
         boris_timestamp = response['timestamps']['boris_last_comment']
         comments_count = response['comments']['total']
-        if flow_timestamp > self.flow_timestamp:
+        if flow_timestamp > self.__flow_timestamp:
             self.__update_flow(flow_timestamp)
-        if boris_timestamp > self.boris_timestamp:
+        if boris_timestamp > self.__boris_timestamp:
             self.__update_boris(boris_timestamp, comments_count)
 
     def __update_flow(self, timestamp):
-        params = {'start': self.flow_timestamp,
-                  'end': self.flow_timestamp,
+        params = {'start': self.__flow_timestamp,
+                  'end': self.__flow_timestamp,
                   'with_heroes': False,
                   'with_updated': False,
                   'with_recent': False,
                   'with_valid': False}
-        response = requests.get(self.flow_api_url, params=params)
+        response = requests.get(self.__flow_api_url, params=params)
         if response.status_code != 200:
             return
-        self.flow_timestamp = timestamp
-        self.flow_messages = response.json()['before']
-        db.update(self.database_updates_table, 'id = 0', flow_timestamp=timestamp)
+        self.__flow_timestamp = timestamp
+        self.__flow_messages = response.json()['before']
+        db.update(self.__database_updates_table, 'id = 0', flow_timestamp=timestamp)
 
     def __update_boris(self, timestamp, comments_count):
-        params = {'take': comments_count - self.comments_count + 10,
+        params = {'take': comments_count - self.__comments_count + 10,
                   'skip': 0}
-        response = requests.get(self.boris_api_url, params=params)
+        response = requests.get(self.__boris_api_url, params=params)
         if response.status_code != 200:
             return
         response = response.json()['comments']
         for comment in response:
-            if comment['created_at'] > self.boris_timestamp:
-                self.boris_messages.append(comment)
+            if comment['created_at'] > self.__boris_timestamp:
+                self.__boris_messages.append(comment)
             else:
                 break
-        self.boris_timestamp = timestamp
-        self.comments_count = comments_count
-        db.update(self.database_updates_table, 'id = 0', boris_timestamp=timestamp, comments_count=comments_count)
+        self.__boris_timestamp = timestamp
+        self.__comments_count = comments_count
+        db.update(self.__database_updates_table, 'id = 0', boris_timestamp=timestamp, comments_count=comments_count)
 
     def subscribe_flow(self, bot, message):
         telegram_id = message.from_user.id
@@ -151,35 +151,35 @@ class Vault:
         template = '_Скрывающийся под псевдонимом_ *~{}* _поделился фото в Течении:_' \
                    '\n*{}*\n_и написал:_\n{}\n{}'
         message = template.format(author, title, description, link)
-        for addressee in self.subscribers['flow']:
+        for addressee in self.__subscribers['flow']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
     def __send_text_message(self, bot, author, title, description, link):
         template = '_Скрывающийся под псевдонимом_ *~{}* _поделился мыслями в Течении:_' \
                    '\n*{}*\n{}\n{}'
         message = template.format(author, title, description, link)
-        for addressee in self.subscribers['flow']:
+        for addressee in self.__subscribers['flow']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
     def __send_audio_message(self, bot, author, title, description, link):
         template = '_Скрывающийся под псевдонимом_ *~{}* _поделился аудиозаписью в Течении:_' \
                    '\n*{}*\n_и написал:_\n{}\n{}'
         message = template.format(author, title, description, link)
-        for addressee in self.subscribers['flow']:
+        for addressee in self.__subscribers['flow']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
     def __send_video_message(self, bot, author, title, description, link):
         template = '_Скрывающийся под псевдонимом_ *~{}* _поделился видеозаписью в Течении:_' \
                    '\n*{}*\n_и написал:_\n{}\n{}'
         message = template.format(author, title, description, link)
-        for addressee in self.subscribers['flow']:
+        for addressee in self.__subscribers['flow']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
     def __send_other_message(self, bot, author, title, description, link):
         template = '_Скрывающийся под псевдонимом_ *~{}* _поделился чем-то неординарным в Течении:_' \
                    '\n*{}*\n_и написал:_\n{}\n{}'
         message = template.format(author, title, description, link)
-        for addressee in self.subscribers['flow']:
+        for addressee in self.__subscribers['flow']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
     def __send_boris_message(self, bot, author, comment, with_files):
@@ -191,17 +191,17 @@ class Vault:
         else:
             with_files = ''
         message = template.format(author, comment, with_files, link)
-        for addressee in self.subscribers['boris']:
+        for addressee in self.__subscribers['boris']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
     def scheduled(self, bot):
         self.__check_updates()
-        while self.flow_messages:
-            post = self.flow_messages.pop()
+        while self.__flow_messages:
+            post = self.__flow_messages.pop()
             author = post['user']['username']
             title = post['title']
             description = post['description']
-            link = 'https://{}/post{}'.format(self.vault_url, post['id'])
+            link = 'https://{}/post{}'.format(self.__vault_url, post['id'])
             content_type = post['type']
             if content_type == 'image':
                 self.__send_image_message(bot, author, title, description, link)
@@ -213,15 +213,15 @@ class Vault:
                 self.__send_video_message(bot, author, title, description, link)
             if content_type == 'other':
                 self.__send_other_message(bot, author, title, description, link)
-        while self.boris_messages:
+        while self.__boris_messages:
             with_files = False
-            comment = self.boris_messages.pop()
+            comment = self.__boris_messages.pop()
             author = comment['user']['username']
             text = comment['text']
             if comment['files']:
                 with_files = True
-            while self.boris_messages and self.boris_messages[-1]['user']['username'] == author:
-                comment = self.boris_messages.pop()
+            while self.__boris_messages and self.__boris_messages[-1]['user']['username'] == author:
+                comment = self.__boris_messages.pop()
                 text += '\n_и продолжает:_\n'
                 text += comment['text']
                 if comment['files']:

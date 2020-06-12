@@ -1,11 +1,20 @@
 import sqlite3
-from config import DATABASE
+from config import DATABASE, BOT_OWNER_ID
 
 
-def convert_value(value):
+def _column_in_table(table, column):
+    request = 'PRAGMA TABLE_INFO({})'.format(table)
+    response = raw_request(request)
+    for columns in response:
+        if columns[1] == column:
+            return True
+    return False
+
+
+def _convert_value(value):
     if isinstance(value, str):
         return '"{}"'.format(value)
-    elif isinstance(value, int) and isinstance(value, float):
+    elif isinstance(value, int) or isinstance(value, float):
         return value
     else:
         vt = type(value)
@@ -57,8 +66,9 @@ def add_column(table, column, default=None, database=DATABASE):
         column_type = 'REAL'
     else:
         raise AssertionError('default может быть только типов str, int, float, а здесь {}!'.format(type(default)))
-    request = 'ALTER TABLE {} ADD COLUMN {} {} DEFAULT {}'.format(table, column, column_type, default)
-    raw_request(request, save=True, database=database)
+    if not _column_in_table(table, column):
+        request = 'ALTER TABLE {} ADD COLUMN {} {} NOT NULL DEFAULT {}'.format(table, column, column_type, default)
+        raw_request(request, save=True, database=database)
 
 
 def insert(table, row_id, database=DATABASE, **columns_and_values):
@@ -66,11 +76,11 @@ def insert(table, row_id, database=DATABASE, **columns_and_values):
         raise AssertionError('Не указаны столбцы и значения!')
     request = 'INSERT INTO {} ({}) VALUES ({})'
     columns = ['id']
-    values = [row_id]
+    values = [str(row_id)]
     for key, value in columns_and_values.items():
         columns.append(key)
-        value = convert_value(value)
-        values.append(value)
+        value = _convert_value(value)
+        values.append(str(value))
     columns = ', '.join(columns)
     values = ', '.join(values)
     request = request.format(table, columns, values)
@@ -82,8 +92,15 @@ def update(table, condition, database=DATABASE, **columns_and_values):
         raise AssertionError('Не указаны столбцы и значения')
     sets = []
     for column, value in columns_and_values.items():
-        value = convert_value(value)
+        value = _convert_value(value)
         sets.append('{} = {}'.format(column, value))
     sets = ', '.join(sets)
     request = 'UPDATE {} SET {} WHERE {}'.format(table, sets, condition)
     raw_request(request, save=True, database=database)
+
+
+create_table('users', access_level=1)
+if not select('users', condition='id = {}'.format(BOT_OWNER_ID)):
+    insert('users', BOT_OWNER_ID, access_level=5)
+
+__all__ = ['raw_request', 'create_table', 'select', 'add_column', 'insert', 'update']
