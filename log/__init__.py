@@ -14,6 +14,8 @@ def log(message: str, filename: str = 'logfile.log') -> None:
     """
     dt = datetime.datetime.utcnow()
     dt = dt.isoformat(sep=' ', timespec='seconds')
-    message = '[{} + 00:00]: {}\n'.format(dt, message)
+    message = '[{} + 00:00]: {}'.format(dt, message)
+    message += '\n'
+    print(message)
     with open(filename, 'a') as logfile:
         logfile.write(message)

@@ -2,14 +2,15 @@
 Модуль диспетчера с классом Dispatcher -- загружает плагины и рулит планировщиком
 """
 from typing import Optional, List
-from telegram import Bot
 from threading import Thread
 from datetime import datetime, timedelta
+from globalobjects import RUNNING_FLAG
 import time
+import log
 
 
 class Dispatcher(Thread):
-    def __init__(self, bot: Bot, plugins: List[dict], scheduled_plugins: Optional[List[dict]] = None):
+    def __init__(self, bot, plugins: List[dict], scheduled_plugins: Optional[List[dict]] = None):
         """
         Класс работает в отдельном треде
         Методы:
@@ -26,30 +27,32 @@ class Dispatcher(Thread):
         self.__plugins = plugins
         self.__scheduled_plugins = scheduled_plugins
         self.__bot = bot
-        self.__running_flag = True
         self.__tasks_stack = []
 
     def run(self) -> None:
         """
         Запихивает список обработчиков комманд в объект бота, а потом запускает
-        бесконечный цикл диспетчера и все это в отдельном треде.
-        Он будет крутиться, пока self.__running_flag не станет false (будет изменено)
+        бесконечный цикл который дергает периодичные плагины
+        Он будет крутиться, пока RUNNING_FLAG() не вернет false Подробнее в модуле globalobjects
         :return: None
         """
         if self.__scheduled_plugins is None:
             self.__scheduled_plugins = []
         self.__bot.load_command_plugins(self.__plugins)
-        while self.__running_flag:  # TODO: сделать способ остановить бесконечный цикл по комманде извне
+        log.log('=== bot started ===')
+        while RUNNING_FLAG():
             self.scheduler()
             while self.__tasks_stack:
                 task = self.__tasks_stack.pop()
                 self.task_handler(**task)
             time.sleep(1)
+        self.__bot.stop_polling()
+        log.log('=== bot stopped ===')
 
     def scheduler(self) -> None:
         """
         Запускает переодичные плагины в определенные промежутки времени
-        :return:
+        :return: None
         """
         dt = datetime.utcnow()
         for plugin in self.__scheduled_plugins:

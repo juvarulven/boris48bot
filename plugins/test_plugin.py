@@ -6,6 +6,7 @@ from config import BOT_OWNER_ID
 
 def test_simple(bot, message):
     print('test_simple work')
+    print(message)
     bot.send_message(message.from_user.id, 'passed!')
 
 

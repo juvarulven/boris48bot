@@ -39,6 +39,7 @@ from . import test_plugin
 from . import help_plugin
 from . import speak_plugin
 from . import vault_plugin
+from . import stop_plugin
 
 command_handlers = [{'commands': ['start'], 'handler': help_plugin.start_message},
                     {'commands': ['help'], 'handler': help_plugin.help_message},
@@ -47,7 +48,8 @@ command_handlers = [{'commands': ['start'], 'handler': help_plugin.start_message
                     {'commands': ['subflow'], 'handler': vault_plugin.vault.subscribe_flow},
                     {'commands': ['subboris'], 'handler': vault_plugin.vault.subscribe_boris},
                     {'commands': ['unsubflow'], 'handler': vault_plugin.vault.unsubscribe_flow},
-                    {'commands': ['unsubboris'], 'handler': vault_plugin.vault.unsubscribe_boris}]
+                    {'commands': ['unsubboris'], 'handler': vault_plugin.vault.unsubscribe_boris},
+                    {'commands': ['killall'], 'handler': stop_plugin.stop}] # TODO сделать access level'ы
 
 scheduled_handlers = [{'handler': vault_plugin.vault.scheduled, 'minutes': 1}]
 

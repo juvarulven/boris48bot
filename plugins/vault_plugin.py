@@ -1,52 +1,66 @@
 import database as db
 import requests
+import log
 from config import VAULT_URL, VAULT_API_PORT
+from globalobjects import RUNNING_FLAG
 
 
 class Vault:
     def __init__(self, vault_url, api_port):
-        self.__vault_url = vault_url
-        self.__api_port = api_port
-        self.__stats_api_url = '{}:{}/stats'.format(vault_url, api_port)
-        self.__flow_api_url = '{}:{}/node/diff'.format(vault_url, api_port)
-        self.__boris_api_url = '{}:{}/node/696/comment'.format(vault_url, api_port)
-        self.__flow_messages = []
-        self.__boris_messages = []
-        self.__subscribers = {'flow': [], 'boris': []}
-        self.__database_updates_table = 'vault_last_updates'
-        self.__flow_timestamp = None
-        self.__boris_timestamp = None
-        self.__comments_count = None
+        self._vault_url = vault_url
+        self._api_port = api_port
+        self._stats_api_url = '{}:{}/stats'.format(vault_url, api_port)
+        self._flow_api_url = '{}:{}/node/diff'.format(vault_url, api_port)
+        self._boris_api_url = '{}:{}/node/696/comment'.format(vault_url, api_port)
+        self._flow_messages = []
+        self._boris_messages = []
+        self._subscribers = {'flow': [], 'boris': []}
+        self._database_updates_table = 'vault_last_updates'
+        self._flow_timestamp = None
+        self._boris_timestamp = None
+        self._comments_count = None
 
-        self.__init_database()
+        self._init_database()
 
-    def __init_database(self):
-        db.create_table(self.__database_updates_table, flow_timestamp='', boris_timestamp='', comments_count=0)
-        last_updates = db.select(self.__database_updates_table)
+    def _init_database(self):
+        db.create_table(self._database_updates_table, flow_timestamp='', boris_timestamp='', comments_count=0)
+        last_updates = db.select(self._database_updates_table)
         if not last_updates:
             status = 0
+            count = 0
             response = None
-            while status != 200:
-                response = requests.get(self.__stats_api_url)
-                status = response.status_code
+            while status != 200 and count < 5:
+                try:
+                    response = requests.get(self._stats_api_url)
+                    status = response.status_code
+                except Exception as error:
+                    error_message = 'vault_plugin: Ошибка при проверке обновлений Убежища: ' + str(error)
+                    log.log(error_message)
+                count += 1
+            if status != 200:
+                error_message = 'vault_plugin: Ошибка при пятикратной проверке обновлений Убежища. Останавливаюсь'
+                log.log(error_message)
+                RUNNING_FLAG(False)
+                return
+
             response = response.json()
-            self.__flow_timestamp = response['timestamps']['flow_last_post']
-            self.__boris_timestamp = response['timestamps']['boris_last_comment']
-            self.__comments_count = response['comments']['total']
-            db.insert(self.__database_updates_table, 0, flow_timestamp=self.__flow_timestamp,
-                      boris_timestamp=self.__boris_timestamp, comments_count=self.__comments_count)
+            self._flow_timestamp = response['timestamps']['flow_last_post']
+            self._boris_timestamp = response['timestamps']['boris_last_comment']
+            self._comments_count = response['comments']['total']
+            db.insert(self._database_updates_table, 0, flow_timestamp=self._flow_timestamp,
+                      boris_timestamp=self._boris_timestamp, comments_count=self._comments_count)
         else:
-            self.__flow_timestamp, self.__boris_timestamp, self.__comments_count = last_updates[0]
+            _, self._flow_timestamp, self._boris_timestamp, self._comments_count = last_updates[0]
         db.add_column('users', 'vault_flow_subscriber', default=0)
         db.add_column('users', 'vault_boris_subscriber', default=0)
         raw_subscribers = db.select('users', 'id', condition='vault_flow_subscriber = 1')
-        self.__subscribers['flow'] = list(map(lambda x: x[0], raw_subscribers))
+        self._subscribers['flow'] = list(map(lambda x: x[0], raw_subscribers))
         raw_subscribers = db.select('users', 'id', condition='vault_boris_subscriber = 1')
-        self.__subscribers['boris'] = list(map(lambda x: x[0], raw_subscribers))
+        self._subscribers['boris'] = list(map(lambda x: x[0], raw_subscribers))
 
-    def __add_subscriber(self, target, telegram_id):
-        if telegram_id not in self.__subscribers[target]:
-            self.__subscribers[target].append(telegram_id)
+    def _add_subscriber(self, target, telegram_id):
+        if telegram_id not in self._subscribers[target]:
+            self._subscribers[target].append(telegram_id)
             condition = 'id = {}'.format(telegram_id)
             if target == 'flow':
                 db.update('users', condition, vault_flow_subscriber=1)
@@ -58,9 +72,9 @@ class Vault:
         else:
             return False
 
-    def __delete_subscriber(self, target, telegram_id):
-        if telegram_id in self.__subscribers[target]:
-            self.__subscribers[target].remove(telegram_id)
+    def _delete_subscriber(self, target, telegram_id):
+        if telegram_id in self._subscribers[target]:
+            self._subscribers[target].remove(telegram_id)
             condition = 'id = {}'.format(telegram_id)
             if target == 'flow':
                 db.update('users', condition, vault_flow_subscriber=0)
@@ -72,52 +86,78 @@ class Vault:
         else:
             return False
 
-    def __check_updates(self):
-        response = requests.get(self.__stats_api_url)
-        if response.status_code != 200:
+    def _check_updates(self):
+        status = 0
+        response = None
+        try:
+            response = requests.get(self._stats_api_url)
+            status = response.status_code
+        except Exception as error:
+            error_message = 'vault_plugin: Ошибка при проверке обновлений Убежища: ' + str(error)
+            log.log(error_message)
+        if status != 200:
             return
+
         response = response.json()
         flow_timestamp = response['timestamps']['flow_last_post']
         boris_timestamp = response['timestamps']['boris_last_comment']
         comments_count = response['comments']['total']
-        if flow_timestamp > self.__flow_timestamp:
-            self.__update_flow(flow_timestamp)
-        if boris_timestamp > self.__boris_timestamp:
-            self.__update_boris(boris_timestamp, comments_count)
+        if flow_timestamp > self._flow_timestamp:
+            self._update_flow(flow_timestamp)
+        if boris_timestamp > self._boris_timestamp:
+            self._update_boris(boris_timestamp, comments_count)
 
-    def __update_flow(self, timestamp):
-        params = {'start': self.__flow_timestamp,
-                  'end': self.__flow_timestamp,
+    def _update_flow(self, timestamp):
+        params = {'start': self._flow_timestamp,
+                  'end': self._flow_timestamp,
                   'with_heroes': False,
                   'with_updated': False,
                   'with_recent': False,
                   'with_valid': False}
-        response = requests.get(self.__flow_api_url, params=params)
-        if response.status_code != 200:
-            return
-        self.__flow_timestamp = timestamp
-        self.__flow_messages = response.json()['before']
-        db.update(self.__database_updates_table, 'id = 0', flow_timestamp=timestamp)
 
-    def __update_boris(self, timestamp, comments_count):
-        params = {'take': comments_count - self.__comments_count + 10,
-                  'skip': 0}
-        response = requests.get(self.__boris_api_url, params=params)
-        if response.status_code != 200:
+        status = 0
+        response = None
+        try:
+            response = requests.get(self._flow_api_url, params=params)
+            status = response.status_code
+        except Exception as error:
+            error_message = 'vault_plugin: Ошибка при проверке обновлений Течения: ' + str(error)
+            log.log(error_message)
+        if status != 200:
             return
+
+        self._flow_timestamp = timestamp
+        self._flow_messages = response.json()['before']
+        db.update(self._database_updates_table, 'id = 0', flow_timestamp=timestamp)
+
+    def _update_boris(self, timestamp, comments_count):
+        params = {'take': comments_count - self._comments_count + 10,
+                  'skip': 0}
+
+        status = 0
+        response = None
+        try:
+            response = requests.get(self._boris_api_url, params=params)
+            status = response.status_code
+        except Exception as error:
+            error_message = 'vault_plugin: Ошибка при проверке обновлений Бориса: ' + str(error)
+            log.log(error_message)
+        if status != 200:
+            return
+
         response = response.json()['comments']
         for comment in response:
-            if comment['created_at'] > self.__boris_timestamp:
-                self.__boris_messages.append(comment)
+            if comment['created_at'] > self._boris_timestamp:
+                self._boris_messages.append(comment)
             else:
                 break
-        self.__boris_timestamp = timestamp
-        self.__comments_count = comments_count
-        db.update(self.__database_updates_table, 'id = 0', boris_timestamp=timestamp, comments_count=comments_count)
+        self._boris_timestamp = timestamp
+        self._comments_count = comments_count
+        db.update(self._database_updates_table, 'id = 0', boris_timestamp=timestamp, comments_count=comments_count)
 
     def subscribe_flow(self, bot, message):
         telegram_id = message.from_user.id
-        added_subscriber = self.__add_subscriber('flow', telegram_id)
+        added_subscriber = self._add_subscriber('flow', telegram_id)
         if added_subscriber:
             bot.send_message(telegram_id, 'Теперь вы будете получать обновления Течения')
         else:
@@ -125,7 +165,7 @@ class Vault:
 
     def subscribe_boris(self, bot, message):
         telegram_id = message.from_user.id
-        added_subscriber = self.__add_subscriber('boris', telegram_id)
+        added_subscriber = self._add_subscriber('boris', telegram_id)
         if added_subscriber:
             bot.send_message(telegram_id, 'Теперь вы будете получать обновления Бориса')
         else:
@@ -133,7 +173,7 @@ class Vault:
 
     def unsubscribe_flow(self, bot, message):
         telegram_id = message.from_user.id
-        added_subscriber = self.__delete_subscriber('flow', telegram_id)
+        added_subscriber = self._delete_subscriber('flow', telegram_id)
         if added_subscriber:
             bot.send_message(telegram_id, 'Вы больше не будете получать обновления Течения')
         else:
@@ -141,48 +181,48 @@ class Vault:
 
     def unsubscribe_boris(self, bot, message):
         telegram_id = message.from_user.id
-        added_subscriber = self.__delete_subscriber('boris', telegram_id)
+        added_subscriber = self._delete_subscriber('boris', telegram_id)
         if added_subscriber:
             bot.send_message(telegram_id, 'Вы больше не будете получать обновления Бориса')
         else:
             bot.send_message(telegram_id, 'Вы не были подписаны на Бориса')
 
-    def __send_image_message(self, bot, author, title, description, link):
+    def _send_image_message(self, bot, author, title, description, link):
         template = '_Скрывающийся под псевдонимом_ *~{}* _поделился фото в Течении:_' \
                    '\n*{}*\n_и написал:_\n{}\n{}'
         message = template.format(author, title, description, link)
-        for addressee in self.__subscribers['flow']:
+        for addressee in self._subscribers['flow']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
-    def __send_text_message(self, bot, author, title, description, link):
+    def _send_text_message(self, bot, author, title, description, link):
         template = '_Скрывающийся под псевдонимом_ *~{}* _поделился мыслями в Течении:_' \
                    '\n*{}*\n{}\n{}'
         message = template.format(author, title, description, link)
-        for addressee in self.__subscribers['flow']:
+        for addressee in self._subscribers['flow']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
-    def __send_audio_message(self, bot, author, title, description, link):
+    def _send_audio_message(self, bot, author, title, description, link):
         template = '_Скрывающийся под псевдонимом_ *~{}* _поделился аудиозаписью в Течении:_' \
                    '\n*{}*\n_и написал:_\n{}\n{}'
         message = template.format(author, title, description, link)
-        for addressee in self.__subscribers['flow']:
+        for addressee in self._subscribers['flow']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
-    def __send_video_message(self, bot, author, title, description, link):
+    def _send_video_message(self, bot, author, title, description, link):
         template = '_Скрывающийся под псевдонимом_ *~{}* _поделился видеозаписью в Течении:_' \
                    '\n*{}*\n_и написал:_\n{}\n{}'
         message = template.format(author, title, description, link)
-        for addressee in self.__subscribers['flow']:
+        for addressee in self._subscribers['flow']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
-    def __send_other_message(self, bot, author, title, description, link):
+    def _send_other_message(self, bot, author, title, description, link):
         template = '_Скрывающийся под псевдонимом_ *~{}* _поделился чем-то неординарным в Течении:_' \
                    '\n*{}*\n_и написал:_\n{}\n{}'
         message = template.format(author, title, description, link)
-        for addressee in self.__subscribers['flow']:
+        for addressee in self._subscribers['flow']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
-    def __send_boris_message(self, bot, author, comment, with_files):
+    def _send_boris_message(self, bot, author, comment, with_files):
         template = '_Скрывающийся под псевдонимом_ *~{}* _вот что пишет Борису:_' \
                    '\n{}{}\n{}'
         link = 'https://vault48.org/boris'
@@ -191,42 +231,42 @@ class Vault:
         else:
             with_files = ''
         message = template.format(author, comment, with_files, link)
-        for addressee in self.__subscribers['boris']:
+        for addressee in self._subscribers['boris']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
     def scheduled(self, bot):
-        self.__check_updates()
-        while self.__flow_messages:
-            post = self.__flow_messages.pop()
+        self._check_updates()
+        while self._flow_messages:
+            post = self._flow_messages.pop()
             author = post['user']['username']
             title = post['title']
             description = post['description']
-            link = 'https://{}/post{}'.format(self.__vault_url, post['id'])
+            link = 'https://{}/post{}'.format(self._vault_url, post['id'])
             content_type = post['type']
             if content_type == 'image':
-                self.__send_image_message(bot, author, title, description, link)
+                self._send_image_message(bot, author, title, description, link)
             if content_type == 'text':
-                self.__send_text_message(bot, author, title, description, link)
+                self._send_text_message(bot, author, title, description, link)
             if content_type == 'audio':
-                self.__send_audio_message(bot, author, title, description, link)
+                self._send_audio_message(bot, author, title, description, link)
             if content_type == 'video':
-                self.__send_video_message(bot, author, title, description, link)
+                self._send_video_message(bot, author, title, description, link)
             if content_type == 'other':
-                self.__send_other_message(bot, author, title, description, link)
-        while self.__boris_messages:
+                self._send_other_message(bot, author, title, description, link)
+        while self._boris_messages:
             with_files = False
-            comment = self.__boris_messages.pop()
+            comment = self._boris_messages.pop()
             author = comment['user']['username']
             text = comment['text']
             if comment['files']:
                 with_files = True
-            while self.__boris_messages and self.__boris_messages[-1]['user']['username'] == author:
-                comment = self.__boris_messages.pop()
+            while self._boris_messages and self._boris_messages[-1]['user']['username'] == author:
+                comment = self._boris_messages.pop()
                 text += '\n_и продолжает:_\n'
                 text += comment['text']
                 if comment['files']:
                     with_files = True
-            self.__send_boris_message(bot, author, text, with_files)
+            self._send_boris_message(bot, author, text, with_files)
 
 
 vault = Vault(VAULT_URL, VAULT_API_PORT)
