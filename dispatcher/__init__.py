@@ -4,7 +4,7 @@
 from typing import Optional, List
 from threading import Thread
 from datetime import datetime, timedelta
-from globalobjects import RUNNING_FLAG
+from global_variables import RUNNING_FLAG
 import time
 import log
 
@@ -15,8 +15,8 @@ class Dispatcher(Thread):
         Класс работает в отдельном треде
         Методы:
         run -- запускает тред
-        scheduler -- запускает всякие обработчики в определенные промежутки времени
-        task_handler -- пока не делает ничего. Задел на будущее
+        _scheduler -- запускает всякие обработчики в определенные промежутки времени
+        _task_handler -- пока не делает ничего. Задел на будущее
         :param bot: объект телеграм-бота, чтобы взаимодействовать с ним
         :param plugins: список словарей командных плагинов вида
         {'commands': ['комманда'...], 'handler': плагин.функция-обработчик}
@@ -24,10 +24,10 @@ class Dispatcher(Thread):
         {'handler': плагин.функция, 'minutes': периодичность срабатывания в минутах типа float или int}
         """
         super().__init__(daemon=True)
-        self.__plugins = plugins
-        self.__scheduled_plugins = scheduled_plugins
-        self.__bot = bot
-        self.__tasks_stack = []
+        self._plugins = plugins
+        self._scheduled_plugins = scheduled_plugins
+        self._bot = bot
+        self._tasks_stack = []
 
     def run(self) -> None:
         """
@@ -36,33 +36,33 @@ class Dispatcher(Thread):
         Он будет крутиться, пока RUNNING_FLAG() не вернет false Подробнее в модуле globalobjects
         :return: None
         """
-        if self.__scheduled_plugins is None:
-            self.__scheduled_plugins = []
-        self.__bot.load_command_plugins(self.__plugins)
+        if self._scheduled_plugins is None:
+            self._scheduled_plugins = []
+        self._bot.load_command_plugins(self._plugins)
         log.log('=== bot started ===')
-        while RUNNING_FLAG():
-            self.scheduler()
-            while self.__tasks_stack:
-                task = self.__tasks_stack.pop()
-                self.task_handler(**task)
+        while RUNNING_FLAG.value:
+            self._scheduler()
+            while self._tasks_stack:
+                task = self._tasks_stack.pop()
+                self._task_handler(**task)
             time.sleep(1)
-        self.__bot.stop_polling()
+        self._bot.stop_polling()
         log.log('=== bot stopped ===')
 
-    def scheduler(self) -> None:
+    def _scheduler(self) -> None:
         """
         Запускает переодичные плагины в определенные промежутки времени
         :return: None
         """
         dt = datetime.utcnow()
-        for plugin in self.__scheduled_plugins:
+        for plugin in self._scheduled_plugins:
             if 'next_time' not in plugin:
                 plugin['next_time'] = dt + timedelta(minutes=plugin['minutes'])
             if plugin['next_time'] < dt:
                 plugin['next_time'] = dt + timedelta(minutes=plugin['minutes'])
-                task = plugin['handler'](self.__bot)
+                task = plugin['handler'](self._bot)
                 if task:
-                    self.__tasks_stack.append(task)
+                    self._tasks_stack.append(task)
 
-    def task_handler(self, **kwargs):
+    def _task_handler(self, **kwargs):
         pass

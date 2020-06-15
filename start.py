@@ -2,7 +2,6 @@ from dispatcher import Dispatcher
 from telegram import Bot
 from plugins import command_handlers, scheduled_handlers
 from config import TOKEN
-from globalobjects import RUNNING_FLAG
 
 
 bot = Bot(TOKEN)
