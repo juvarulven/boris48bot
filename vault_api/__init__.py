@@ -16,6 +16,8 @@ class Api:
         self._node_url = url + 'node/{}'
         self._diff_url = url + 'node/diff'
         self._comments_url = url + 'node/{}/comment'
+        self.boris_node = 696
+        self.godnota = {'HMT': 1691, 'DZT': 5926, 'HKT': 5823, 'HFT': 5555, 'ROS': 5634}
 
     def get_stats(self):
         try:
@@ -38,6 +40,14 @@ class Api:
             error_message = 'vault_api: Ошибка при попытке получить diff Убежища: ' + str(error)
             log.log(error_message)
 
+    def get_recent(self):
+        response = self.get_diff(with_recent=True)
+        return response.recent
+
+    def get_heroes(self):
+        response = self.get_diff(with_heroes=True)
+        return response.heroes
+
     def get_comments(self, node, take, skip=0):
         params = {'take': take,
                   'skip': skip}
@@ -46,6 +56,13 @@ class Api:
         except Exception as error:
             error_message = 'vault_api: Ошибка при попытке получить comments Убежища: ' + str(error)
             log.log(error_message)
+
+    def get_boris(self, take, skip=0):
+        return self.get_comments(self.boris_node, take, skip)
+
+    def get_godnota(self, name, take, skip=0):
+        if name in self.godnota:
+            return self.get_comments(self.godnota[name], take, skip)
 
     def get_node(self, node):
         try:
