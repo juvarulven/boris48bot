@@ -7,7 +7,6 @@ from config import TOKEN
 bot = Bot(TOKEN)
 dp = Dispatcher(bot, command_handlers, scheduled_plugins=scheduled_handlers)
 
-database_lock = False
 
 if __name__ == "__main__":
     dp.start()
