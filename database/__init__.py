@@ -1,18 +1,20 @@
 import bson
 import os.path
 import time
+from typing import Any, Dict, Set, Union, Optional, Callable
 
 
 class Database:
     file_lock = {}
 
-    def __init__(self, collection):
+    def __init__(self, collection: str):
         self._filename = collection + '.bson'
-        self.__class__.file_lock[self._filename] = False
+        if self._filename not in self.__class__.file_lock:
+            self.__class__.file_lock[self._filename] = False
         self._collection = None
         self._init_collection()
 
-    def _load(self):
+    def _load(self) -> Optional[Dict[Any, dict]]:
         if os.path.exists(self._filename):
             with open(self._filename, 'rb') as collection_file:
                 collection = bson.loads(collection_file.read())
@@ -20,14 +22,14 @@ class Database:
         else:
             return None
 
-    def _init_collection(self):
+    def _init_collection(self) -> None:
         collection = self._load()
         if collection is None:
             self._collection = {}
         else:
             self._collection = collection
 
-    def save_and_update(self):
+    def save_and_update(self) -> None:
         while self.__class__.file_lock[self._filename]:  # Ожидает отпускания блокировки файла
             time.sleep(0.01)
         self.__class__.file_lock[self._filename] = True  # Выставляет блокировку файла
@@ -41,7 +43,7 @@ class Database:
             collection_file.write(bson.dumps(self._collection))
         self.__class__.file_lock[self._filename] = False  # Отпускает блокировку
 
-    def add_document(self, name, *fields, **fields_with_content):
+    def add_document(self, name: Union[str, int], *fields: str, **fields_with_content: Any) -> None:
         additional_dict = {}
         for field in fields:
             additional_dict[field] = None
@@ -50,6 +52,23 @@ class Database:
             self._collection[name] = {}
         self._collection[name].update(**fields_with_content)
 
-    def get_document(self, name):
+    def get_document(self, name: Union[str, int]) -> dict:
         if name in self._collection:
             return self._collection[name].copy()
+
+    def get_documents_names(self) -> Set[Union[str, int]]:
+        return set(self._collection.keys())
+
+    def get_document_names_with_condition(self, **fields_and_functions: Callable[[str], bool]) -> Set[Union[int, str]]:
+        match = set()
+        total_conditions = len(fields_and_functions)
+        for document_name, content in self._collection:
+            matches = total_conditions
+            for field, func in fields_and_functions:
+                if field in content:
+                    result = func(content[field])
+                    if isinstance(result, bool) and result:
+                        matches -= 1
+            if not matches:
+                match.add(document_name)
+        return match
