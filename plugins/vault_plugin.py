@@ -1,43 +1,79 @@
-import database as db
+from typing import Optional, Dict, Tuple
+from database import Database
+from vault_api import Api
 import requests
 import log
-from config import VAULT_URL, VAULT_API_PORT
+from datetime import datetime
 from global_variables import RUNNING_FLAG
-from vault_api import Api
 
 
 class Vault:
-    def __init__(self, vault_url, api_port):
-        self._api = Api(vault_url, api_port)
+    def __init__(self):
+        self._api = Api(testing=True)
         self._flow_messages = []
         self._boris_messages = []
-        self._subscribers = {'flow': [], 'boris': []}
-        self._db_timestamps_table = 'vault_timestamps'
+        self._godnota_messages = []
+        self._subscribers = {'flow': [], 'boris': [], 'comments': []}
+        self._db_users = Database('users')
+        self._db = Database('vault_plugin')
+        self._last_updates = {'flow': {'timestamp': None, 'posts_count': None, 'subscribers': []},
+                              'boris': {'timestamp': None, 'comments_count': None, 'subscribers': []},
+                              'comments': {}, 'comments_count': None}
+        self._godnota = None
         self._init_database()
 
+    @staticmethod
+    def _do_it_5_times(what_to_do, *args, **kwargs):
+        response = None
+        try_counter = 5
+        while response is None and try_counter:
+            response = what_to_do(*args, **kwargs)
+            try_counter -= 1
+        if response is None:
+            RUNNING_FLAG.value = False
+            log.log('vault_plugin: ошибка при попытке сделать {} 5 раз'.format(what_to_do.__name__))
+            return
+        return response
+
     def _init_database(self):
-        db.create_table(self._db_timestamps_table)
-        last_updates = db.select(self._db_timestamps_table)
-        if not last_updates:
-            timestamps_and_comments_count = {}
-            counter = 5
-            while not timestamps_and_comments_count and counter:
-                for name, value in self._api.get_comments_count_and_timestamps():
-                    timestamps_and_comments_count[name] = value
-                counter -= 1
-            if timestamps_and_comments_count:
-                pass  # TODO: доделать
-            else:
-                log.log('vault_plugin: Не удалось получить timestamp\'ы Убежища пять раз')
-                RUNNING_FLAG.value = False
+        need_update_db = False
+        last_updates = self._db.get_document('last_updates')
+        if last_updates is None:
+            need_update_db = True
+            stats = self._do_it_5_times(self._api.get_stats)
+            # TODO: Сделать нормально, когда Григорий починит flow_last_post в API stats'ов
+            now = datetime.utcnow().isoformat(timespec='milliseconds') + 'Z'
+            diff = self._do_it_5_times(self._api.get_diff, start=now, end=now)
+            boris = self._do_it_5_times(self._api.get_boris, 1)
+            if stats is None or diff is None or boris is None:
+                log.log('vault_plugin: Не удалось получить stats, diff или boris за пять попыток')
+                return
+            self._last_updates['comments_count'] = stats.comments_total
+            self._last_updates['flow']['timestamp'] = diff.after[0].created_at
+            self._last_updates['flow']['posts_count'] = stats.nodes_total
+            self._last_updates['boris']['timestamp'] = boris.comments[0].created_at
+            self._last_updates['boris']['comments_count'] = boris.comment_count
         else:
-            _, self._flow_timestamp, self._boris_timestamp, self._comments_count = last_updates[0]
-        db.add_column('users', 'vault_flow_subscriber', default=0)
-        db.add_column('users', 'vault_boris_subscriber', default=0)
-        raw_subscribers = db.select('users', 'id', condition='vault_flow_subscriber = 1')
-        self._subscribers['flow'] = list(map(lambda x: x[0], raw_subscribers))
-        raw_subscribers = db.select('users', 'id', condition='vault_boris_subscriber = 1')
-        self._subscribers['boris'] = list(map(lambda x: x[0], raw_subscribers))
+            self._last_updates = last_updates
+        self._godnota = self._do_it_5_times(self._api.get_godnota)
+        if self._godnota is None:
+            log.log('vault_plugin: Не удалось получить годноту за пять попыток')
+            return
+        for title, post_id in self._godnota:
+            if post_id not in self._last_updates['comments']:
+                need_update_db = True
+                comments = self._do_it_5_times(self._api.get_comments, post_id, 1)
+                if comments is None:
+                    log.log('vault_plugin: не удалось получить комментарии из {} за пять попыток'.format(title))
+                    return
+                self._last_updates['comments'][post_id] = {}
+                self._last_updates['comments'][post_id]['title'] = title
+                self._last_updates['comments'][post_id]['timestamp'] = comments.comments[0].created_at
+                self._last_updates['comments'][post_id]['comments_count'] = comments.comment_count
+                self._last_updates['comments'][post_id]['subscribers'] = {}
+        if need_update_db:
+            self._db.update_document('last_updates', fields_with_content=self._last_updates)
+            self._db.save_and_update()
 
     def _add_subscriber(self, target, telegram_id):
         if telegram_id not in self._subscribers[target]:
@@ -206,7 +242,7 @@ class Vault:
     def _send_boris_message(self, bot, author, comment, with_files):
         template = '_Скрывающийся под псевдонимом_ *~{}* _вот что пишет Борису:_' \
                    '\n{}{}\n{}'
-        link = 'https://vault48.org/boris'
+        link = self._api.url + 'boris'
         if with_files:
             with_files = '\n\n_да вдобавок прикрепляет какие-то прикрепления!_'
         else:
@@ -222,7 +258,7 @@ class Vault:
             author = post['user']['username']
             title = post['title']
             description = post['description']
-            link = 'https://{}/post{}'.format(self._vault_url, post['id'])
+            link = '{}post{}'.format(self._api.url, post['id'])
             content_type = post['type']
             if content_type == 'image':
                 self._send_image_message(bot, author, title, description, link)
@@ -250,6 +286,6 @@ class Vault:
             self._send_boris_message(bot, author, text, with_files)
 
 
-vault = Vault(VAULT_URL, VAULT_API_PORT)
+vault = Vault()
 
 __all__ = ['vault']

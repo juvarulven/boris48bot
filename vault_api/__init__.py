@@ -12,12 +12,13 @@ class Api:
             url = TEST_URL
         else:
             url = MAIN_URL
+        self.url = url[:-6] + '/'
         self._stats_url = url + 'stats'
         self._node_url = url + 'node/{}'
         self._diff_url = url + 'node/diff'
         self._comments_url = url + 'node/{}/comment'
+        self._related_url = url + 'node/{}/related'
         self.boris_node = 696
-        self.godnota = {'HMT': 1691, 'DZT': 5926, 'HKT': 5823, 'HFT': 5555, 'ROS': 5634}
 
     def get_stats(self):
         try:
@@ -60,9 +61,17 @@ class Api:
     def get_boris(self, take, skip=0):
         return self.get_comments(self.boris_node, take, skip)
 
-    def get_godnota(self, name, take, skip=0):
-        if name in self.godnota:
-            return self.get_comments(self.godnota[name], take, skip)
+    def get_godnota(self):
+        node_names_and_ids = {'Хорошей музыки тред': 1691}
+        try:
+            response = get_json(self._related_url)['related']['albums']['/годнота']
+        except Exception as error:
+            error_message = 'vault_api: Ошибка при попытке получить related Убежища' + str(error)
+            log.log(error_message)
+            return
+        for node in response:
+            node_names_and_ids[node['title']] = node['id']
+        return node_names_and_ids
 
     def get_node(self, node):
         try:
@@ -70,6 +79,8 @@ class Api:
         except Exception as error:
             error_message = 'vault_api: Ошибка при попытке получить node Убежища: ' + str(error)
             log.log(error_message)
+
+
 
 
 def get_json(url, **params):
