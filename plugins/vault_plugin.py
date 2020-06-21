@@ -193,7 +193,7 @@ class Vault:
 
     def subscribe_boris(self, bot, message):
         telegram_id = message.from_user.id
-        added_subscriber = self._change_subscribers_list('boris', telegram_id)
+        added_subscriber = self._add_subscriber('boris', telegram_id)
         if added_subscriber:
             bot.send_message(telegram_id, 'Теперь вы будете получать обновления Бориса')
         else:
