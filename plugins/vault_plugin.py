@@ -12,12 +12,11 @@ class Vault:
         self._api = Api(testing=True)
         self._flow_messages = []
         self._boris_messages = []
-        self._godnota_messages = []
-        self._subscribers = {'flow': [], 'boris': [], 'comments': []}
+        self._godnota_messages = {}
         self._db_users = Database('users')
         self._db = Database('vault_plugin')
-        self._last_updates = {'flow': {'timestamp': None, 'posts_count': None, 'subscribers': []},
-                              'boris': {'timestamp': None, 'comments_count': None, 'subscribers': []},
+        self._last_updates = {'flow': {'timestamp': None, 'subscribers': []},
+                              'boris': {'timestamp': None, 'subscribers': []},
                               'comments': {}, 'comments_count': None}
         self._godnota = None
         self._init_database()
@@ -41,18 +40,11 @@ class Vault:
         if last_updates is None:
             need_update_db = True
             stats = self._do_it_5_times(self._api.get_stats)
-            # TODO: Сделать нормально, когда Григорий починит flow_last_post в API stats'ов
-            now = datetime.utcnow().isoformat(timespec='milliseconds') + 'Z'
-            diff = self._do_it_5_times(self._api.get_diff, start=now, end=now)
-            boris = self._do_it_5_times(self._api.get_boris, 1)
-            if stats is None or diff is None or boris is None:
-                log.log('vault_plugin: Не удалось получить stats, diff или boris за пять попыток')
+            if stats is None:
                 return
             self._last_updates['comments_count'] = stats.comments_total
-            self._last_updates['flow']['timestamp'] = diff.after[0].created_at
-            self._last_updates['flow']['posts_count'] = stats.nodes_total
-            self._last_updates['boris']['timestamp'] = boris.comments[0].created_at
-            self._last_updates['boris']['comments_count'] = boris.comment_count
+            self._last_updates['flow']['timestamp'] = stats.timestamps_flow
+            self._last_updates['boris']['timestamp'] = stats.timestamps_boris
         else:
             self._last_updates = last_updates
         self._godnota = self._do_it_5_times(self._api.get_godnota)
@@ -69,112 +61,104 @@ class Vault:
                 self._last_updates['comments'][post_id] = {}
                 self._last_updates['comments'][post_id]['title'] = title
                 self._last_updates['comments'][post_id]['timestamp'] = comments.comments[0].created_at
-                self._last_updates['comments'][post_id]['comments_count'] = comments.comment_count
                 self._last_updates['comments'][post_id]['subscribers'] = {}
         if need_update_db:
             self._db.update_document('last_updates', fields_with_content=self._last_updates)
             self._db.save_and_update()
 
-    def _add_subscriber(self, target, telegram_id):
-        if telegram_id not in self._subscribers[target]:
-            self._subscribers[target].append(telegram_id)
-            condition = 'id = {}'.format(telegram_id)
-            if target == 'flow':
-                db.update('users', condition, vault_flow_subscriber=1)
-            elif target == 'boris':
-                db.update('users', condition, vault_boris_subscriber=1)
-            else:
-                raise AssertionError('target может быть либо "flow", либо "boris"')
-            return True
+    def _change_subscribers_list(self, target, telegram_id, add):
+        need_update_db = False
+        if target in self._last_updates:
+            target = self._last_updates[target]['subscribers']
+            if telegram_id not in target:
+                need_update_db = True
+                if add:
+                    target.append(telegram_id)
+                else:
+                    target.remove(telegram_id)
+        elif target in self._last_updates['comments']:
+            target = self._last_updates['comments'][target]['subscribers']
+            if telegram_id not in target:
+                need_update_db = True
+                if add:
+                    target.append(telegram_id)
+                else:
+                    target.remove(telegram_id)
         else:
-            return False
-
-    def _delete_subscriber(self, target, telegram_id):
-        if telegram_id in self._subscribers[target]:
-            self._subscribers[target].remove(telegram_id)
-            condition = 'id = {}'.format(telegram_id)
-            if target == 'flow':
-                db.update('users', condition, vault_flow_subscriber=0)
-            elif target == 'boris':
-                db.update('users', condition, vault_boris_subscriber=0)
-            else:
-                raise AssertionError('target может быть либо "flow", либо "boris"')
-            return True
-        else:
-            return False
+            raise AssertionError('vault_plugin: ' + str(target) + 'отсутствует в базе')
+        if need_update_db:
+            self._db.update_document('last_updates', fields_with_content=self._last_updates)
+            self._db.save_and_update()
+        return need_update_db
 
     def _check_updates(self):
-        status = 0
-        response = None
-        try:
-            response = requests.get(self._stats_api_url)
-            status = response.status_code
-        except Exception as error:
-            error_message = 'vault_plugin: Ошибка при проверке обновлений Убежища: ' + str(error)
-            log.log(error_message)
-        if status != 200:
-            return
+        stats = self._api.get_stats()
+        need_update_db = []
+        if stats is not None:
+            need_update_db = [self._update_flow(stats.timestamps_flow),
+                              self._update_boris(stats.timestamps_boris, stats.comments_total)]
+        need_update_db.append(self._update_godnota(stats.comments_total))
 
-        response = response.json()
-        flow_timestamp = response['timestamps']['flow_last_post']
-        boris_timestamp = response['timestamps']['boris_last_comment']
-        comments_count = response['comments']['total']
-        if flow_timestamp > self._flow_timestamp:
-            self._update_flow(flow_timestamp)
-        if boris_timestamp > self._boris_timestamp:
-            self._update_boris(boris_timestamp, comments_count)
+    def _update_flow(self, current_timestamp):
+        last_timestamp = self._last_updates['flow']['timestamp']
+        if last_timestamp < current_timestamp:
+            diff = self._api.get_diff(last_timestamp, last_timestamp)
+            if diff is None:
+                return False
+            self._last_updates['flow']['timestamp'] = current_timestamp
+            self._flow_messages = diff.before
+            return True
+        return False
 
-    def _update_flow(self, timestamp):
-        params = {'start': self._flow_timestamp,
-                  'end': self._flow_timestamp,
-                  'with_heroes': False,
-                  'with_updated': False,
-                  'with_recent': False,
-                  'with_valid': False}
-
-        status = 0
-        response = None
-        try:
-            response = requests.get(self._flow_api_url, params=params)
-            status = response.status_code
-        except Exception as error:
-            error_message = 'vault_plugin: Ошибка при проверке обновлений Течения: ' + str(error)
-            log.log(error_message)
-        if status != 200:
-            return
-
-        self._flow_timestamp = timestamp
-        self._flow_messages = response.json()['before']
-        db.update(self._db_timestamps_table, 'id = 0', flow_timestamp=timestamp)
-
-    def _update_boris(self, timestamp, comments_count):
-        params = {'take': comments_count - self._comments_count + 10,
-                  'skip': 0}
-
-        status = 0
-        response = None
-        try:
-            response = requests.get(self._boris_api_url, params=params)
-            status = response.status_code
-        except Exception as error:
-            error_message = 'vault_plugin: Ошибка при проверке обновлений Бориса: ' + str(error)
-            log.log(error_message)
-        if status != 200:
-            return
-
-        response = response.json()['comments']
-        for comment in response:
-            if comment['created_at'] > self._boris_timestamp:
+    def _update_boris(self, current_timestamp, current_comments_count):
+        last_timestamp = self._last_updates['boris']['timestamp']
+        last_comments_count = self._last_updates['comments_count']
+        if last_timestamp < current_timestamp:
+            comments = self._api.get_boris(current_comments_count - last_comments_count + 5)
+            if comments is None:
+                return False
+            for comment in comments.comments:
+                if comment.created_at <= last_timestamp:
+                    break
                 self._boris_messages.append(comment)
-            else:
-                break
-        self._boris_timestamp = timestamp
-        self._comments_count = comments_count
-        db.update(self._db_timestamps_table, 'id = 0', boris_timestamp=timestamp, comments_count=comments_count)
+            self._last_updates['boris']['timestamp'] = current_timestamp
+            return True
+        return False  # todo: переделать
+
+    def _update_comments(self, node, last_timestamp, comments_count):
+        comments = self._api.get_comments(node, comments_count)
+        # todo: доделать
+
+
+    def _update_godnota(self, current_comments_count):
+        need_update_db = False
+        recent = self._api.get_recent()
+        if recent is None:
+            return False
+        last_comments_count = self._last_updates['comments_count']
+        for node in recent:
+            node_id = node.id
+            commented_at = node.commented_at
+            if node_id in self._last_updates['comments']:
+                current = self._last_updates['comments'][node_id]
+                if current['subscribers'] and commented_at > current['timestamp']:
+                    comments = self._api.get_comments(node_id, current_comments_count - last_comments_count + 5)
+                    if comments is None:
+                        continue
+                    last_timestamp = current['timestamp']
+                    for comment in comments.comments:
+                        if comment.created_at <= last_timestamp:
+                            break
+                    # todo: доделать
+
+
+
+
+
 
     def subscribe_flow(self, bot, message):
         telegram_id = message.from_user.id
-        added_subscriber = self._add_subscriber('flow', telegram_id)
+        added_subscriber = self._change_subscribers_list('flow', telegram_id)
         if added_subscriber:
             bot.send_message(telegram_id, 'Теперь вы будете получать обновления Течения')
         else:
@@ -182,7 +166,7 @@ class Vault:
 
     def subscribe_boris(self, bot, message):
         telegram_id = message.from_user.id
-        added_subscriber = self._add_subscriber('boris', telegram_id)
+        added_subscriber = self._change_subscribers_list('boris', telegram_id)
         if added_subscriber:
             bot.send_message(telegram_id, 'Теперь вы будете получать обновления Бориса')
         else:
