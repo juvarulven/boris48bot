@@ -1,9 +1,8 @@
 from typing import Optional, Dict, Tuple
+from telebot import types as markups
 from database import Database
 from vault_api import Api
-import requests
 import log
-from datetime import datetime
 from global_variables import RUNNING_FLAG
 
 
@@ -13,7 +12,6 @@ class Vault:
         self._flow_messages = []
         self._boris_messages = []
         self._godnota_messages = {}
-        self._db_users = Database('users')
         self._db = Database('vault_plugin')
         self._last_updates = {'flow': {'timestamp': None, 'subscribers': []},
                               'boris': {'timestamp': None, 'subscribers': []},
@@ -98,6 +96,12 @@ class Vault:
             need_update_db = [self._update_flow(stats.timestamps_flow),
                               self._update_boris(stats.timestamps_boris, stats.comments_total)]
         need_update_db.append(self._update_godnota(stats.comments_total))
+        if stats.comments_total != self._last_updates['comments_count']:
+            self._last_updates['comments_count'] = stats.comments_total
+            need_update_db.append(True)
+        if any(need_update_db):
+            self._db.update_document('last_updates', fields_with_content=self._last_updates)
+            self._db.save_and_update()
 
     def _update_flow(self, current_timestamp):
         last_timestamp = self._last_updates['flow']['timestamp']
@@ -112,57 +116,80 @@ class Vault:
 
     def _update_boris(self, current_timestamp, current_comments_count):
         last_timestamp = self._last_updates['boris']['timestamp']
-        last_comments_count = self._last_updates['comments_count']
+        comments_count = current_comments_count - self._last_updates['comments_count'] + 5
         if last_timestamp < current_timestamp:
-            comments = self._api.get_boris(current_comments_count - last_comments_count + 5)
-            if comments is None:
+            comments = self._update_comments(self._api.boris_node, last_timestamp, comments_count)
+            if not comments:
                 return False
-            for comment in comments.comments:
-                if comment.created_at <= last_timestamp:
-                    break
-                self._boris_messages.append(comment)
             self._last_updates['boris']['timestamp'] = current_timestamp
             return True
-        return False  # todo: переделать
+        return False
 
     def _update_comments(self, node, last_timestamp, comments_count):
+        comments_list = []
         comments = self._api.get_comments(node, comments_count)
-        # todo: доделать
-
+        if comments is None:
+            return comments_list
+        for comment in comments.comments:
+            if comment.created_at <= last_timestamp:
+                break
+            comments_list.append(comment)
+        return comments_list
 
     def _update_godnota(self, current_comments_count):
         need_update_db = False
         recent = self._api.get_recent()
         if recent is None:
             return False
-        last_comments_count = self._last_updates['comments_count']
+        comments_count = current_comments_count - self._last_updates['comments_count'] + 5
         for node in recent:
             node_id = node.id
-            commented_at = node.commented_at
+            current_timestamp = node.commented_at
             if node_id in self._last_updates['comments']:
+                node_dict = {}
                 current = self._last_updates['comments'][node_id]
-                if current['subscribers'] and commented_at > current['timestamp']:
-                    comments = self._api.get_comments(node_id, current_comments_count - last_comments_count + 5)
-                    if comments is None:
+                last_timestamp = current['timestamp']
+                if current['subscribers'] and current_timestamp > last_timestamp:
+                    comments = self._update_comments(node_id, last_timestamp, comments_count)
+                    if not comments:
                         continue
-                    last_timestamp = current['timestamp']
-                    for comment in comments.comments:
-                        if comment.created_at <= last_timestamp:
-                            break
-                    # todo: доделать
+                    need_update_db = True
+                    current['timestamp'] = current_timestamp
+                    node_dict['title'] = node.title
+                    node_dict['comments_list'] = comments
+                    self._godnota_messages[node_id] = node_dict
+        return need_update_db
 
-
-
-
-
-
-    def subscribe_flow(self, bot, message):
+    def sub(self, bot, message):
         telegram_id = message.from_user.id
-        added_subscriber = self._change_subscribers_list('flow', telegram_id)
-        if added_subscriber:
-            bot.send_message(telegram_id, 'Теперь вы будете получать обновления Течения')
+        text = message.text
+        if len(text) < 6:
+            markup = markups.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
+            markup.add(markups.KeyboardButton('/sub Течение'), markups.KeyboardButton('/sub Борис'),
+                       *[markups.KeyboardButton('/sub ' + target) for target in self._godnota])
+            bot.send_message(telegram_id, 'На что хотите подписаться?', reply_markup=markup)
         else:
-            bot.send_message(telegram_id, 'Вы уже подписаны на Течение')
+            text = text[5:]
+            if text == 'Teчение':
+                result = self._change_subscribers_list('flow', telegram_id, add=True)
+                if result:
+                    bot.send_message(telegram_id, 'Теперь вы будете получать обновления Течения')
+                else:
+                    bot.send_message(telegram_id, 'Вы уже подписаны на Течение')
+            elif text == 'Борис':
+                result = self._change_subscribers_list('flow', telegram_id, add=True)
+                if result:
+                    bot.send_message(telegram_id, 'Теперь вы будете получать обновления Бориса')
+                else:
+                    bot.send_message(telegram_id, 'Вы уже подписаны на Бориса')
+            elif text in self._godnota:
+                result = self._change_subscribers_list(self._godnota[text], telegram_id, add=True)
+                if result:
+                    bot.send_message(telegram_id, 'Теперь вы будете получать обновления из ' + text)
+                else:
+                    bot.send_message(telegram_id, 'Вы уже подписаны на ' + text)
+            else:
+                bot.send_message(telegram_id, 'На такое невозможно подписаться')
 
     def subscribe_boris(self, bot, message):
         telegram_id = message.from_user.id

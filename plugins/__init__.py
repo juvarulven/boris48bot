@@ -49,7 +49,7 @@ command_handlers = [{'commands': ['start'], 'handler': help_plugin.start_message
                     {'commands': ['subboris'], 'handler': vault_plugin.vault.subscribe_boris},
                     {'commands': ['unsubflow'], 'handler': vault_plugin.vault.unsubscribe_flow},
                     {'commands': ['unsubboris'], 'handler': vault_plugin.vault.unsubscribe_boris},
-                    {'commands': ['killall'], 'handler': stop_plugin.stop}] # TODO сделать access level'ы
+                    {'commands': ['killall'], 'handler': stop_plugin.stop}]  # TODO сделать access level'ы
 
 scheduled_handlers = [{'handler': vault_plugin.vault.scheduled, 'minutes': 1}]
 
