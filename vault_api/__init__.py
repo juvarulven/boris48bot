@@ -15,6 +15,7 @@ class Api:
         self.url = url[:-6] + '/'
         self._stats_url = url + 'stats'
         self._node_url = url + 'node/{}'
+        self.post_url = url + 'post{}'
         self._diff_url = url + 'node/diff'
         self._comments_url = url + 'node/{}/comment'
         self._related_url = url + 'node/{}/related'
@@ -64,7 +65,7 @@ class Api:
     def get_godnota(self):
         node_names_and_ids = {'Хорошей музыки тред': 1691}
         try:
-            response = get_json(self._related_url)['related']['albums']['/годнота']
+            response = get_json(self._related_url.format(1691))['related']['albums']['/годнота']
         except Exception as error:
             error_message = 'vault_api: Ошибка при попытке получить related Убежища' + str(error)
             log.log(error_message)
@@ -81,9 +82,7 @@ class Api:
             log.log(error_message)
 
 
-
-
 def get_json(url, **params):
     response = requests.get(url, **params)
-    if requests.status_codes == 200:
+    if response.status_code == 200:
         return response.json()

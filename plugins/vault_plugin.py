@@ -1,7 +1,8 @@
-from typing import Optional, Dict, Tuple
+from typing import Union, Optional, Dict, List, Callable, Any
 from telebot import types as markups
 from database import Database
 from vault_api import Api
+from vault_api.types import DiffPost, Comment
 import log
 from global_variables import RUNNING_FLAG
 
@@ -9,18 +10,24 @@ from global_variables import RUNNING_FLAG
 class Vault:
     def __init__(self):
         self._api = Api(testing=True)
-        self._flow_messages = []
-        self._boris_messages = []
-        self._godnota_messages = {}
+        self._flow_messages: List[DiffPost] = []
+        self._boris_messages: List[Comment] = []
+        self._godnota_updates: List[str] = []
         self._db = Database('vault_plugin')
-        self._last_updates = {'flow': {'timestamp': None, 'subscribers': []},
-                              'boris': {'timestamp': None, 'subscribers': []},
-                              'comments': {}, 'comments_count': None}
-        self._godnota = None
+        self._last_updates: Dict[str, Union[Dict[Union[str, int],
+                                                 Union[Optional[str],
+                                                       List[int],
+                                                       Dict[str,
+                                                            Union[str, List[int]]]]],
+                                            Optional[int]]] = \
+            {'flow': {'timestamp': None, 'subscribers': []},
+             'boris': {'timestamp': None, 'subscribers': []},
+             'comments': {}, 'comments_count': None}
+        self._godnota: Optional[Dict[str, int]] = None
         self._init_database()
 
     @staticmethod
-    def _do_it_5_times(what_to_do, *args, **kwargs):
+    def _do_it_5_times(what_to_do: Callable[[Any], Any], *args: [Any], **kwargs: [Any]) -> Any:
         response = None
         try_counter = 5
         while response is None and try_counter:
@@ -32,7 +39,7 @@ class Vault:
             return
         return response
 
-    def _init_database(self):
+    def _init_database(self) -> None:
         need_update_db = False
         last_updates = self._db.get_document('last_updates')
         if last_updates is None:
@@ -49,39 +56,38 @@ class Vault:
         if self._godnota is None:
             log.log('vault_plugin: Не удалось получить годноту за пять попыток')
             return
-        for title, post_id in self._godnota:
+        for title, post_id in self._godnota.items():
             if post_id not in self._last_updates['comments']:
                 need_update_db = True
                 comments = self._do_it_5_times(self._api.get_comments, post_id, 1)
                 if comments is None:
                     log.log('vault_plugin: не удалось получить комментарии из {} за пять попыток'.format(title))
                     return
-                self._last_updates['comments'][post_id] = {}
-                self._last_updates['comments'][post_id]['title'] = title
+                self._last_updates['comments'][post_id]: Dict[str, Union[str, List[int]]] = {}
                 self._last_updates['comments'][post_id]['timestamp'] = comments.comments[0].created_at
-                self._last_updates['comments'][post_id]['subscribers'] = {}
+                self._last_updates['comments'][post_id]['subscribers'] = []
         if need_update_db:
             self._db.update_document('last_updates', fields_with_content=self._last_updates)
             self._db.save_and_update()
 
-    def _change_subscribers_list(self, target, telegram_id, add):
+    def _change_subscribers_list(self, target: Union[str, int], telegram_id: int, add: bool) -> bool:
         need_update_db = False
         if target in self._last_updates:
             target = self._last_updates[target]['subscribers']
-            if telegram_id not in target:
+            if add and telegram_id not in target:
                 need_update_db = True
-                if add:
-                    target.append(telegram_id)
-                else:
-                    target.remove(telegram_id)
+                target.append(telegram_id)
+            if not add and telegram_id in target:
+                need_update_db = True
+                target.remove(telegram_id)
         elif target in self._last_updates['comments']:
             target = self._last_updates['comments'][target]['subscribers']
-            if telegram_id not in target:
+            if add and telegram_id not in target:
                 need_update_db = True
-                if add:
-                    target.append(telegram_id)
-                else:
-                    target.remove(telegram_id)
+                target.append(telegram_id)
+            if not add and telegram_id in target:
+                need_update_db = True
+                target.remove(telegram_id)
         else:
             raise AssertionError('vault_plugin: ' + str(target) + 'отсутствует в базе')
         if need_update_db:
@@ -89,13 +95,13 @@ class Vault:
             self._db.save_and_update()
         return need_update_db
 
-    def _check_updates(self):
+    def _check_updates(self) -> None:
         stats = self._api.get_stats()
         need_update_db = []
         if stats is not None:
             need_update_db = [self._update_flow(stats.timestamps_flow),
                               self._update_boris(stats.timestamps_boris, stats.comments_total)]
-        need_update_db.append(self._update_godnota(stats.comments_total))
+        need_update_db.append(self._update_godnota())
         if stats.comments_total != self._last_updates['comments_count']:
             self._last_updates['comments_count'] = stats.comments_total
             need_update_db.append(True)
@@ -103,7 +109,7 @@ class Vault:
             self._db.update_document('last_updates', fields_with_content=self._last_updates)
             self._db.save_and_update()
 
-    def _update_flow(self, current_timestamp):
+    def _update_flow(self, current_timestamp: str) -> bool:
         last_timestamp = self._last_updates['flow']['timestamp']
         if last_timestamp < current_timestamp:
             diff = self._api.get_diff(last_timestamp, last_timestamp)
@@ -114,7 +120,7 @@ class Vault:
             return True
         return False
 
-    def _update_boris(self, current_timestamp, current_comments_count):
+    def _update_boris(self, current_timestamp: str, current_comments_count: int) -> bool:
         last_timestamp = self._last_updates['boris']['timestamp']
         comments_count = current_comments_count - self._last_updates['comments_count'] + 5
         if last_timestamp < current_timestamp:
@@ -125,7 +131,7 @@ class Vault:
             return True
         return False
 
-    def _update_comments(self, node, last_timestamp, comments_count):
+    def _update_comments(self, node: int, last_timestamp: str, comments_count: int) -> List[Comment]:
         comments_list = []
         comments = self._api.get_comments(node, comments_count)
         if comments is None:
@@ -136,28 +142,21 @@ class Vault:
             comments_list.append(comment)
         return comments_list
 
-    def _update_godnota(self, current_comments_count):
+    def _update_godnota(self) -> bool:
         need_update_db = False
         recent = self._api.get_recent()
         if recent is None:
             return False
-        comments_count = current_comments_count - self._last_updates['comments_count'] + 5
         for node in recent:
             node_id = node.id
             current_timestamp = node.commented_at
             if node_id in self._last_updates['comments']:
-                node_dict = {}
                 current = self._last_updates['comments'][node_id]
                 last_timestamp = current['timestamp']
                 if current['subscribers'] and current_timestamp > last_timestamp:
-                    comments = self._update_comments(node_id, last_timestamp, comments_count)
-                    if not comments:
-                        continue
                     need_update_db = True
                     current['timestamp'] = current_timestamp
-                    node_dict['title'] = node.title
-                    node_dict['comments_list'] = comments
-                    self._godnota_messages[node_id] = node_dict
+                    self._godnota_updates.append(node.title)
         return need_update_db
 
     def sub(self, bot, message):
@@ -170,14 +169,14 @@ class Vault:
             bot.send_message(telegram_id, 'На что хотите подписаться?', reply_markup=markup)
         else:
             text = text[5:]
-            if text == 'Teчение':
+            if text == 'Течение':
                 result = self._change_subscribers_list('flow', telegram_id, add=True)
                 if result:
                     bot.send_message(telegram_id, 'Теперь вы будете получать обновления Течения')
                 else:
                     bot.send_message(telegram_id, 'Вы уже подписаны на Течение')
             elif text == 'Борис':
-                result = self._change_subscribers_list('flow', telegram_id, add=True)
+                result = self._change_subscribers_list('boris', telegram_id, add=True)
                 if result:
                     bot.send_message(telegram_id, 'Теперь вы будете получать обновления Бориса')
                 else:
@@ -189,68 +188,84 @@ class Vault:
                 else:
                     bot.send_message(telegram_id, 'Вы уже подписаны на ' + text)
             else:
-                bot.send_message(telegram_id, 'На такое невозможно подписаться')
+                bot.send_message(telegram_id, 'Нельзя подписаться на то, чего для меня не существует. :3')
 
-    def subscribe_boris(self, bot, message):
+    def unsub(self, bot, message):
         telegram_id = message.from_user.id
-        added_subscriber = self._add_subscriber('boris', telegram_id)
-        if added_subscriber:
-            bot.send_message(telegram_id, 'Теперь вы будете получать обновления Бориса')
+        text = message.text
+        if len(text) < 8:
+            markup = markups.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
+            markup.add(markups.KeyboardButton('/unsub Течение'), markups.KeyboardButton('/unsub Борис'),
+                       *[markups.KeyboardButton('/unsub ' + target) for target in self._godnota])
+            bot.send_message(telegram_id, 'От чего хотите отписаться?', reply_markup=markup)
         else:
-            bot.send_message(telegram_id, 'Вы уже подписаны на Бориса')
+            text = text[7:]
+            if text == 'Течение':
+                result = self._change_subscribers_list('flow', telegram_id, add=False)
+                if result:
+                    bot.send_message(telegram_id, 'Теперь вы не будете получать обновления Течения')
+                else:
+                    bot.send_message(telegram_id, 'Вы не были подписаны на Течение')
+            elif text == 'Борис':
+                result = self._change_subscribers_list('boris', telegram_id, add=False)
+                if result:
+                    bot.send_message(telegram_id, 'Теперь вы не будете получать обновления Бориса')
+                else:
+                    bot.send_message(telegram_id, 'Вы не были подписаны на Бориса')
+            elif text in self._godnota:
+                result = self._change_subscribers_list(self._godnota[text], telegram_id, add=False)
+                if result:
+                    bot.send_message(telegram_id, 'Теперь вы не будете получать обновления из ' + text)
+                else:
+                    bot.send_message(telegram_id, 'Вы не были подписаны на ' + text)
+            else:
+                bot.send_message(telegram_id, 'Нельзя отписаться от того, чего не существует для меня. :3')
 
-    def unsubscribe_flow(self, bot, message):
-        telegram_id = message.from_user.id
-        added_subscriber = self._delete_subscriber('flow', telegram_id)
-        if added_subscriber:
-            bot.send_message(telegram_id, 'Вы больше не будете получать обновления Течения')
-        else:
-            bot.send_message(telegram_id, 'Вы не были подписаны на Течение')
-
-    def unsubscribe_boris(self, bot, message):
-        telegram_id = message.from_user.id
-        added_subscriber = self._delete_subscriber('boris', telegram_id)
-        if added_subscriber:
-            bot.send_message(telegram_id, 'Вы больше не будете получать обновления Бориса')
-        else:
-            bot.send_message(telegram_id, 'Вы не были подписаны на Бориса')
-
-    def _send_image_message(self, bot, author, title, description, link):
+    def _send_image_message(self, bot, post: DiffPost, link: str) -> None:
         template = '_Скрывающийся под псевдонимом_ *~{}* _поделился фото в Течении:_' \
                    '\n*{}*\n_и написал:_\n{}\n{}'
-        message = template.format(author, title, description, link)
-        for addressee in self._subscribers['flow']:
+        message = template.format(post.user.username, post.title, post.description, link)
+        for addressee in self._last_updates['flow']['subscribers']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
-    def _send_text_message(self, bot, author, title, description, link):
+    def _send_text_message(self, bot, post: DiffPost, link: str) -> None:
         template = '_Скрывающийся под псевдонимом_ *~{}* _поделился мыслями в Течении:_' \
                    '\n*{}*\n{}\n{}'
-        message = template.format(author, title, description, link)
-        for addressee in self._subscribers['flow']:
+        message = template.format(post.user.username, post.title, post.description, link)
+        for addressee in self._last_updates['flow']['subscribers']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
-    def _send_audio_message(self, bot, author, title, description, link):
+    def _send_audio_message(self, bot, post: DiffPost, link: str) -> None:
         template = '_Скрывающийся под псевдонимом_ *~{}* _поделился аудиозаписью в Течении:_' \
                    '\n*{}*\n_и написал:_\n{}\n{}'
-        message = template.format(author, title, description, link)
-        for addressee in self._subscribers['flow']:
+        message = template.format(post.user.username, post.title, post.description, link)
+        for addressee in self._last_updates['flow']['subscribers']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
-    def _send_video_message(self, bot, author, title, description, link):
+    def _send_video_message(self, bot, post: DiffPost, link: str) -> None:
         template = '_Скрывающийся под псевдонимом_ *~{}* _поделился видеозаписью в Течении:_' \
                    '\n*{}*\n_и написал:_\n{}\n{}'
-        message = template.format(author, title, description, link)
-        for addressee in self._subscribers['flow']:
+        message = template.format(post.user.username, post.title, post.description, link)
+        for addressee in self._last_updates['flow']['subscribers']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
-    def _send_other_message(self, bot, author, title, description, link):
+    def _send_other_message(self, bot, post: DiffPost, link: str) -> None:
         template = '_Скрывающийся под псевдонимом_ *~{}* _поделился чем-то неординарным в Течении:_' \
                    '\n*{}*\n_и написал:_\n{}\n{}'
-        message = template.format(author, title, description, link)
-        for addressee in self._subscribers['flow']:
+        message = template.format(post.user.username, post.title, post.description, link)
+        for addressee in self._last_updates['flow']['subscribers']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
-    def _send_boris_message(self, bot, author, comment, with_files):
+    def _send_boris_message(self, bot, *comments):
+        with_files = False
+        author = comments[0].user.username
+        text = []
+        for comment in comments:
+            if comment.files:
+                with_files = True
+            if comment.text:
+                text.append(comment.text)
+        text = '\n_и продолжает:_\n'.join(text)
         template = '_Скрывающийся под псевдонимом_ *~{}* _вот что пишет Борису:_' \
                    '\n{}{}\n{}'
         link = self._api.url + 'boris'
@@ -258,43 +273,38 @@ class Vault:
             with_files = '\n\n_да вдобавок прикрепляет какие-то прикрепления!_'
         else:
             with_files = ''
-        message = template.format(author, comment, with_files, link)
-        for addressee in self._subscribers['boris']:
+        message = template.format(author, text, with_files, link)
+        for addressee in self._last_updates['boris']['subscribers']:
+            bot.send_message(addressee, message, parse_mode='Markdown')
+
+    def _send_godnota_message(self, bot, title: str, node: int) -> None:
+        template = '_В коллекции_ *{}* _появилось что-то новенькое_'
+        link = self._api.post_url.format(node)
+        message = template.format(title, link)
+        for addressee in self._last_updates['comments'][node]['subscribers']:
             bot.send_message(addressee, message, parse_mode='Markdown')
 
     def scheduled(self, bot):
+        post_types: Dict[str, Callable[[Any, DiffPost, str], None]] = {'image': self._send_image_message,
+                                                                       'text': self._send_text_message,
+                                                                       'audio': self._send_audio_message,
+                                                                       'video': self._send_video_message,
+                                                                       'other': self._send_other_message}
         self._check_updates()
         while self._flow_messages:
             post = self._flow_messages.pop()
-            author = post['user']['username']
-            title = post['title']
-            description = post['description']
-            link = '{}post{}'.format(self._api.url, post['id'])
-            content_type = post['type']
-            if content_type == 'image':
-                self._send_image_message(bot, author, title, description, link)
-            if content_type == 'text':
-                self._send_text_message(bot, author, title, description, link)
-            if content_type == 'audio':
-                self._send_audio_message(bot, author, title, description, link)
-            if content_type == 'video':
-                self._send_video_message(bot, author, title, description, link)
-            if content_type == 'other':
-                self._send_other_message(bot, author, title, description, link)
+            if post.type in post_types:
+                link = self._api.post_url.format(post.id)
+                post_types[post.type](bot, post, link)
         while self._boris_messages:
-            with_files = False
-            comment = self._boris_messages.pop()
-            author = comment['user']['username']
-            text = comment['text']
-            if comment['files']:
-                with_files = True
-            while self._boris_messages and self._boris_messages[-1]['user']['username'] == author:
-                comment = self._boris_messages.pop()
-                text += '\n_и продолжает:_\n'
-                text += comment['text']
-                if comment['files']:
-                    with_files = True
-            self._send_boris_message(bot, author, text, with_files)
+            comments = [self._boris_messages.pop()]
+            while self._boris_messages and self._boris_messages[-1].user.username == comments[0].user.username:
+                comments.append(self._boris_messages.pop())
+            self._send_boris_message(bot, *comments)
+        while self._godnota_updates:
+            title = self._godnota_updates.pop()
+            node = self._godnota[title]
+            self._send_godnota_message(bot, title, node)
 
 
 vault = Vault()

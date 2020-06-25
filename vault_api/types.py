@@ -74,7 +74,7 @@ class User(BasicUser):
         self.role = dictionary['role']
         self.fullname = dictionary['fullname']
         self.description = dictionary['description']
-        self.is_activated = dictionary['dictionary']
+        self.is_activated = dictionary['is_activated']
         self.last_seen = dictionary['last_seen']
         self.last_seen_messages = dictionary['last_seen_messages']
         self.created_at = dictionary['created_at']
@@ -133,4 +133,4 @@ class Hero:
         self.title = dictionary['title']
 
 
-__all__ = ['Stats', 'Comments', 'Diff', 'User', 'Node', 'Tag']
+__all__ = ['Stats', 'Comments', 'Diff', 'User', 'Node', 'Tag', 'Comment', 'BasicUser', 'DiffPost', 'Node']
