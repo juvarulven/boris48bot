@@ -5,11 +5,14 @@ from telebot import TeleBot
 
 
 class Bot(TeleBot):
+    instance = None
+
     def __init__(self, token: str):
         """
         :param token: токен телеграм-бота
         """
         super().__init__(token)
+        self.__class__.instance = self
 
     def message_handler_method(self, handler, commands=None, regexp=None, func=None, content_types=None, **kwargs):
         """
@@ -57,16 +60,3 @@ class Bot(TeleBot):
                 'в списке "commands" словаря плагина содержатся не строки: ' + repr(plugin)
             self.message_handler_method(plugin['handler'], commands=plugin['commands'])
 
-    def _exec_task(self, task, *args, **kwargs):
-        """
-        Переопределенный метод из класса TeleBot
-        Костыль, вбитый для того, чтобы плагины получали доступ к объекту бота
-        :param task: функция (хендлер)
-        :param args:
-        :param kwargs:
-        :return:
-        """
-        if self.threaded:
-            self.worker_pool.put(task, self, *args, **kwargs)
-        else:
-            task(self, *args, **kwargs)

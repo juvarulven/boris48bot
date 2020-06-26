@@ -1,4 +1,5 @@
 import random
+from global_variables import TELEGRAM_BOT
 
 
 PHRASES = ['Ответ на твоё одиночество кроется в одиночестве. Удивительно? Нет.',
@@ -23,9 +24,9 @@ PHRASES = ['Ответ на твоё одиночество кроется в о
 random.seed()
 
 
-def speak_message(bot, message):
+def speak_message(message):
     answer = random.choice(PHRASES)
-    bot.send_message(message.from_user.id, answer)
+    TELEGRAM_BOT.value.send_message(message.from_user.id, answer)
 
 
 __all__ = ['speak_message']

@@ -2,9 +2,11 @@ from dispatcher import Dispatcher
 from telegram import Bot
 from plugins import command_handlers, scheduled_handlers
 from config import TOKEN
+from global_variables import TELEGRAM_BOT
 
 
 bot = Bot(TOKEN)
+TELEGRAM_BOT.value = bot
 dp = Dispatcher(bot, command_handlers, scheduled_plugins=scheduled_handlers)
 
 

@@ -4,7 +4,7 @@ from database import Database
 from vault_api import Api
 from vault_api.types import DiffPost, Comment
 import log
-from global_variables import RUNNING_FLAG
+from global_variables import RUNNING_FLAG, TELEGRAM_BOT
 
 
 class Vault:
@@ -159,104 +159,118 @@ class Vault:
                     self._godnota_updates.append(node.title)
         return need_update_db
 
-    def sub(self, bot, message):
+    def sub(self, message):
+        telegram_id = message.from_user.id
+        markup = markups.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
+        markup.add(markups.KeyboardButton('Течение'), markups.KeyboardButton('Борис'),
+                   *[markups.KeyboardButton(target) for target in self._godnota],
+                   markups.KeyboardButton('Закончить'))
+        TELEGRAM_BOT.value.send_message(telegram_id, 'На что хотите подписаться?', reply_markup=markup)
+        TELEGRAM_BOT.value.register_next_step_handler(message, self.sub_next_step)
+
+    def sub_next_step(self, message):
+        text = message.text
+        telegram_id = message.from_user.id
+        if text == 'Течение':
+            result = self._change_subscribers_list('flow', telegram_id, add=True)
+            if result:
+                TELEGRAM_BOT.value.send_message(telegram_id, 'Теперь вы будете получать обновления Течения')
+            else:
+                TELEGRAM_BOT.value.send_message(telegram_id, 'Вы уже подписаны на Течение')
+        elif text == 'Борис':
+            result = self._change_subscribers_list('boris', telegram_id, add=True)
+            if result:
+                TELEGRAM_BOT.value.send_message(telegram_id, 'Теперь вы будете получать обновления Бориса')
+            else:
+                TELEGRAM_BOT.value.send_message(telegram_id, 'Вы уже подписаны на Бориса')
+        elif text in self._godnota:
+            result = self._change_subscribers_list(self._godnota[text], telegram_id, add=True)
+            if result:
+                TELEGRAM_BOT.value.send_message(telegram_id, 'Теперь вы будете получать обновления из ' + text)
+            else:
+                TELEGRAM_BOT.value.send_message(telegram_id, 'Вы уже подписаны на ' + text)
+        elif text == 'Закончить':
+            markup = markups.ReplyKeyboardRemove(selective=False)
+            TELEGRAM_BOT.value.send_message(message.from_user.id, 'Рад услужить', reply_markup=markup)
+            return
+        else:
+            TELEGRAM_BOT.value.send_message(telegram_id, 'Нельзя подписаться на то, чего для меня не существует. :3')
+        TELEGRAM_BOT.value.register_next_step_handler(message, self.sub_next_step, TELEGRAM_BOT)
+
+    def unsub(self, message):
+        telegram_id = message.from_user.id
+        markup = markups.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
+        markup.add(markups.KeyboardButton('Течение'), markups.KeyboardButton('Борис'),
+                   *[markups.KeyboardButton(target) for target in self._godnota],
+                   markups.KeyboardButton('Закончить'))
+        TELEGRAM_BOT.value.send_message(telegram_id, 'От чего хотите отписаться?', reply_markup=markup)
+        TELEGRAM_BOT.value.register_next_step_handler(message, self.unsub_next_step, bot=TELEGRAM_BOT)
+
+    def unsub_next_step(self, message):
         telegram_id = message.from_user.id
         text = message.text
-        if len(text) < 6:
-            markup = markups.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
-            markup.add(markups.KeyboardButton('/sub Течение'), markups.KeyboardButton('/sub Борис'),
-                       *[markups.KeyboardButton('/sub ' + target) for target in self._godnota])
-            bot.send_message(telegram_id, 'На что хотите подписаться?', reply_markup=markup)
-        else:
-            text = text[5:]
-            if text == 'Течение':
-                result = self._change_subscribers_list('flow', telegram_id, add=True)
-                if result:
-                    bot.send_message(telegram_id, 'Теперь вы будете получать обновления Течения')
-                else:
-                    bot.send_message(telegram_id, 'Вы уже подписаны на Течение')
-            elif text == 'Борис':
-                result = self._change_subscribers_list('boris', telegram_id, add=True)
-                if result:
-                    bot.send_message(telegram_id, 'Теперь вы будете получать обновления Бориса')
-                else:
-                    bot.send_message(telegram_id, 'Вы уже подписаны на Бориса')
-            elif text in self._godnota:
-                result = self._change_subscribers_list(self._godnota[text], telegram_id, add=True)
-                if result:
-                    bot.send_message(telegram_id, 'Теперь вы будете получать обновления из ' + text)
-                else:
-                    bot.send_message(telegram_id, 'Вы уже подписаны на ' + text)
+        if text == 'Течение':
+            result = self._change_subscribers_list('flow', telegram_id, add=False)
+            if result:
+                TELEGRAM_BOT.value.send_message(telegram_id, 'Теперь вы не будете получать обновления Течения')
             else:
-                bot.send_message(telegram_id, 'Нельзя подписаться на то, чего для меня не существует. :3')
-
-    def unsub(self, bot, message):
-        telegram_id = message.from_user.id
-        text = message.text
-        if len(text) < 8:
-            markup = markups.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
-            markup.add(markups.KeyboardButton('/unsub Течение'), markups.KeyboardButton('/unsub Борис'),
-                       *[markups.KeyboardButton('/unsub ' + target) for target in self._godnota])
-            bot.send_message(telegram_id, 'От чего хотите отписаться?', reply_markup=markup)
-        else:
-            text = text[7:]
-            if text == 'Течение':
-                result = self._change_subscribers_list('flow', telegram_id, add=False)
-                if result:
-                    bot.send_message(telegram_id, 'Теперь вы не будете получать обновления Течения')
-                else:
-                    bot.send_message(telegram_id, 'Вы не были подписаны на Течение')
-            elif text == 'Борис':
-                result = self._change_subscribers_list('boris', telegram_id, add=False)
-                if result:
-                    bot.send_message(telegram_id, 'Теперь вы не будете получать обновления Бориса')
-                else:
-                    bot.send_message(telegram_id, 'Вы не были подписаны на Бориса')
-            elif text in self._godnota:
-                result = self._change_subscribers_list(self._godnota[text], telegram_id, add=False)
-                if result:
-                    bot.send_message(telegram_id, 'Теперь вы не будете получать обновления из ' + text)
-                else:
-                    bot.send_message(telegram_id, 'Вы не были подписаны на ' + text)
+                TELEGRAM_BOT.value.send_message(telegram_id, 'Вы не были подписаны на Течение')
+        elif text == 'Борис':
+            result = self._change_subscribers_list('boris', telegram_id, add=False)
+            if result:
+                TELEGRAM_BOT.value.send_message(telegram_id, 'Теперь вы не будете получать обновления Бориса')
             else:
-                bot.send_message(telegram_id, 'Нельзя отписаться от того, чего не существует для меня. :3')
+                TELEGRAM_BOT.value.send_message(telegram_id, 'Вы не были подписаны на Бориса')
+        elif text in self._godnota:
+            result = self._change_subscribers_list(self._godnota[text], telegram_id, add=False)
+            if result:
+                TELEGRAM_BOT.value.send_message(telegram_id, 'Теперь вы не будете получать обновления из ' + text)
+            else:
+                TELEGRAM_BOT.value.send_message(telegram_id, 'Вы не были подписаны на ' + text)
+        elif text == 'Закончить':
+            markup = markups.ReplyKeyboardRemove(selective=False)
+            TELEGRAM_BOT.value.send_message(message.from_user.id, 'Рад услужить', reply_markup=markup)
+            return
+        else:
+            TELEGRAM_BOT.value.send_message(telegram_id, 'Нельзя отписаться от того, чего не существует для меня. :3')
+        TELEGRAM_BOT.value.register_next_step_handler(message, self.unsub_next_step, TELEGRAM_BOT)
 
-    def _send_image_message(self, bot, post: DiffPost, link: str) -> None:
+    def _send_image_message(self, post: DiffPost, link: str) -> None:
         template = '_Скрывающийся под псевдонимом_ *~{}* _поделился фото в Течении:_' \
                    '\n*{}*\n_и написал:_\n{}\n{}'
         message = template.format(post.user.username, post.title, post.description, link)
         for addressee in self._last_updates['flow']['subscribers']:
-            bot.send_message(addressee, message, parse_mode='Markdown')
+            TELEGRAM_BOT.value.send_message(addressee, message, parse_mode='Markdown')
 
-    def _send_text_message(self, bot, post: DiffPost, link: str) -> None:
+    def _send_text_message(self, post: DiffPost, link: str) -> None:
         template = '_Скрывающийся под псевдонимом_ *~{}* _поделился мыслями в Течении:_' \
                    '\n*{}*\n{}\n{}'
         message = template.format(post.user.username, post.title, post.description, link)
         for addressee in self._last_updates['flow']['subscribers']:
-            bot.send_message(addressee, message, parse_mode='Markdown')
+            TELEGRAM_BOT.value.send_message(addressee, message, parse_mode='Markdown')
 
-    def _send_audio_message(self, bot, post: DiffPost, link: str) -> None:
+    def _send_audio_message(self, post: DiffPost, link: str) -> None:
         template = '_Скрывающийся под псевдонимом_ *~{}* _поделился аудиозаписью в Течении:_' \
                    '\n*{}*\n_и написал:_\n{}\n{}'
         message = template.format(post.user.username, post.title, post.description, link)
         for addressee in self._last_updates['flow']['subscribers']:
-            bot.send_message(addressee, message, parse_mode='Markdown')
+            TELEGRAM_BOT.value.send_message(addressee, message, parse_mode='Markdown')
 
-    def _send_video_message(self, bot, post: DiffPost, link: str) -> None:
+    def _send_video_message(self, post: DiffPost, link: str) -> None:
         template = '_Скрывающийся под псевдонимом_ *~{}* _поделился видеозаписью в Течении:_' \
                    '\n*{}*\n_и написал:_\n{}\n{}'
         message = template.format(post.user.username, post.title, post.description, link)
         for addressee in self._last_updates['flow']['subscribers']:
-            bot.send_message(addressee, message, parse_mode='Markdown')
+            TELEGRAM_BOT.value.send_message(addressee, message, parse_mode='Markdown')
 
-    def _send_other_message(self, bot, post: DiffPost, link: str) -> None:
+    def _send_other_message(self, post: DiffPost, link: str) -> None:
         template = '_Скрывающийся под псевдонимом_ *~{}* _поделился чем-то неординарным в Течении:_' \
                    '\n*{}*\n_и написал:_\n{}\n{}'
         message = template.format(post.user.username, post.title, post.description, link)
         for addressee in self._last_updates['flow']['subscribers']:
-            bot.send_message(addressee, message, parse_mode='Markdown')
+            TELEGRAM_BOT.value.send_message(addressee, message, parse_mode='Markdown')
 
-    def _send_boris_message(self, bot, *comments):
+    def _send_boris_message(self, *comments):
         with_files = False
         author = comments[0].user.username
         text = []
@@ -275,36 +289,36 @@ class Vault:
             with_files = ''
         message = template.format(author, text, with_files, link)
         for addressee in self._last_updates['boris']['subscribers']:
-            bot.send_message(addressee, message, parse_mode='Markdown')
+            TELEGRAM_BOT.value.send_message(addressee, message, parse_mode='Markdown')
 
-    def _send_godnota_message(self, bot, title: str, node: int) -> None:
+    def _send_godnota_message(self, title: str, node: int) -> None:
         template = '_В коллекции_ *{}* _появилось что-то новенькое_'
         link = self._api.post_url.format(node)
         message = template.format(title, link)
         for addressee in self._last_updates['comments'][node]['subscribers']:
-            bot.send_message(addressee, message, parse_mode='Markdown')
+            TELEGRAM_BOT.value.send_message(addressee, message, parse_mode='Markdown')
 
-    def scheduled(self, bot):
-        post_types: Dict[str, Callable[[Any, DiffPost, str], None]] = {'image': self._send_image_message,
-                                                                       'text': self._send_text_message,
-                                                                       'audio': self._send_audio_message,
-                                                                       'video': self._send_video_message,
-                                                                       'other': self._send_other_message}
+    def scheduled(self):
+        post_types: Dict[str, Callable[[DiffPost, str], None]] = {'image': self._send_image_message,
+                                                                  'text': self._send_text_message,
+                                                                  'audio': self._send_audio_message,
+                                                                  'video': self._send_video_message,
+                                                                  'other': self._send_other_message}
         self._check_updates()
         while self._flow_messages:
             post = self._flow_messages.pop()
             if post.type in post_types:
                 link = self._api.post_url.format(post.id)
-                post_types[post.type](bot, post, link)
+                post_types[post.type](post, link)
         while self._boris_messages:
             comments = [self._boris_messages.pop()]
             while self._boris_messages and self._boris_messages[-1].user.username == comments[0].user.username:
                 comments.append(self._boris_messages.pop())
-            self._send_boris_message(bot, *comments)
+            self._send_boris_message(*comments)
         while self._godnota_updates:
             title = self._godnota_updates.pop()
             node = self._godnota[title]
-            self._send_godnota_message(bot, title, node)
+            self._send_godnota_message(title, node)
 
 
 vault = Vault()
