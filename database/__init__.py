@@ -141,7 +141,7 @@ __all__ = ['Database']
 if __name__ == '__main__':
     FILE_PATH = ''
     db = Database('test')
-    db.update_document('test_document', ['uno', 'dos'], {'with_int': 123, 'with_str': 'blahblahblah'})
+    db.update_document('test_document', ['uno', 'dos'], {'with_int': 123, 'with_str': 'blah', 'dict_field': {123: 123}})
     db.save_and_update()
     print(db.get_document('test_document'))
     print(db.get_document('abrahadabra'))
@@ -149,3 +149,5 @@ if __name__ == '__main__':
     print(db.get_document_names({'with_int': lambda x: x == 123, 'with_str': lambda x: x == 'blahblahblah'}))
     print(db.get_document_names({'with_int': lambda x: x == 123, 'with_str': lambda x: x == 'blah'}))
     print(db.get_document_names({'is': lambda x: x == 'blahblah'}))
+    db = Database('test')
+    print(db.get_document('test_document'))

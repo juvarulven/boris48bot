@@ -32,10 +32,10 @@ class Api:
                  with_updated=False, with_recent=False, with_valid=False):
         params = {'start': start,
                   'end': end,
-                  'with_heroes': with_heroes,
-                  'with_updated': with_updated,
-                  'with_recent': with_recent,
-                  'with_valid': with_valid}
+                  'with_heroes': str(with_heroes).lower(),
+                  'with_updated': str(with_updated).lower(),
+                  'with_recent': str(with_recent).lower(),
+                  'with_valid': str(with_valid).lower()}
         try:
             return Diff(get_json(self._diff_url, params=params))
         except Exception as error:

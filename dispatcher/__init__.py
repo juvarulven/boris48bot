@@ -66,7 +66,7 @@ class Dispatcher(Thread):
                 plugin['next_time'] = dt + timedelta(minutes=plugin['minutes'])
             if plugin['next_time'] < dt:
                 plugin['next_time'] = dt + timedelta(minutes=plugin['minutes'])
-                task = plugin['handler'](self._bot)
+                task = plugin['handler']()
                 if task:
                     self._tasks_stack.append(task)
 

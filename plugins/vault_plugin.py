@@ -51,6 +51,11 @@ class Vault:
             self._last_updates['flow']['timestamp'] = stats.timestamps_flow
             self._last_updates['boris']['timestamp'] = stats.timestamps_boris
         else:
+            tmp_dict = {}
+            for key in last_updates['comments']:
+                tmp_dict[int(key)] = last_updates['comments'][key]
+            del(last_updates['comments'])
+            last_updates['comments'] = tmp_dict
             self._last_updates = last_updates
         self._godnota = self._do_it_5_times(self._api.get_godnota)
         if self._godnota is None:
@@ -128,6 +133,7 @@ class Vault:
             if not comments:
                 return False
             self._last_updates['boris']['timestamp'] = current_timestamp
+            self._boris_messages = comments
             return True
         return False
 
@@ -149,8 +155,8 @@ class Vault:
             return False
         for node in recent:
             node_id = node.id
-            current_timestamp = node.commented_at
             if node_id in self._last_updates['comments']:
+                current_timestamp = node.commented_at
                 current = self._last_updates['comments'][node_id]
                 last_timestamp = current['timestamp']
                 if current['subscribers'] and current_timestamp > last_timestamp:
@@ -279,9 +285,9 @@ class Vault:
                 with_files = True
             if comment.text:
                 text.append(comment.text)
-        text = '\n_и продолжает:_\n'.join(text)
+        text = '\n\n_и продолжает:_\n\n'.join(text)
         template = '_Скрывающийся под псевдонимом_ *~{}* _вот что пишет Борису:_' \
-                   '\n{}{}\n{}'
+                   '\n\n{}{}\n{}'
         link = self._api.url + 'boris'
         if with_files:
             with_files = '\n\n_да вдобавок прикрепляет какие-то прикрепления!_'
