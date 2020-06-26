@@ -195,7 +195,7 @@ class Vault:
             return
         else:
             TELEGRAM_BOT.value.send_message(telegram_id, 'Нельзя подписаться на то, чего для меня не существует. :3')
-        TELEGRAM_BOT.value.register_next_step_handler(message, self.sub_next_step, TELEGRAM_BOT)
+        TELEGRAM_BOT.value.register_next_step_handler(message, self.sub_next_step)
 
     def unsub(self, message):
         telegram_id = message.from_user.id
@@ -204,7 +204,7 @@ class Vault:
                    *[markups.KeyboardButton(target) for target in self._godnota],
                    markups.KeyboardButton('Закончить'))
         TELEGRAM_BOT.value.send_message(telegram_id, 'От чего хотите отписаться?', reply_markup=markup)
-        TELEGRAM_BOT.value.register_next_step_handler(message, self.unsub_next_step, bot=TELEGRAM_BOT)
+        TELEGRAM_BOT.value.register_next_step_handler(message, self.unsub_next_step)
 
     def unsub_next_step(self, message):
         telegram_id = message.from_user.id
@@ -233,7 +233,7 @@ class Vault:
             return
         else:
             TELEGRAM_BOT.value.send_message(telegram_id, 'Нельзя отписаться от того, чего не существует для меня. :3')
-        TELEGRAM_BOT.value.register_next_step_handler(message, self.unsub_next_step, TELEGRAM_BOT)
+        TELEGRAM_BOT.value.register_next_step_handler(message, self.unsub_next_step)
 
     def _send_image_message(self, post: DiffPost, link: str) -> None:
         template = '_Скрывающийся под псевдонимом_ *~{}* _поделился фото в Течении:_' \
