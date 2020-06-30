@@ -2,17 +2,23 @@
 Все что связано с телеграмом
 """
 from telebot import TeleBot
+from database import Database
 
 
 class Bot(TeleBot):
-    instance = None
-
     def __init__(self, token: str):
         """
         :param token: токен телеграм-бота
         """
         super().__init__(token)
-        self.__class__.instance = self
+        self.db = Database('users')
+        self._users = {}
+        self._load_users()
+
+    def _load_users(self):
+        users = self.db.get_document_names()
+        for user_id in users:
+            self._users[user_id] = self.db.get_document(user_id)
 
     def message_handler_method(self, handler, commands=None, regexp=None, func=None, content_types=None, **kwargs):
         """
@@ -59,4 +65,3 @@ class Bot(TeleBot):
             assert all(list(map(lambda type_of: isinstance(type_of, str), plugin['commands']))), \
                 'в списке "commands" словаря плагина содержатся не строки: ' + repr(plugin)
             self.message_handler_method(plugin['handler'], commands=plugin['commands'])
-
