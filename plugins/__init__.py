@@ -29,7 +29,11 @@ from . import my_plugin
 
 5.1* Для command handler'ов добавить в список command_handlers словарь вида:
 
-{'commands': ['комманда'...], 'handler': плагин.функция-обработчик}
+{'commands': ['комманда'...], 'handler': плагин.функция-обработчик, 'access_level': уровень доступа}
+
+Уровни доступа 1 присваиваются пользователям, когда они пишут боту в первый раз.
+Уровень доступа 2 присваиватся пользователю, ID которого указан в BOT_OWNER_ID модуля config.py
+Уровень доступа 0 присваивается всем ботам, которые пишут этому боту.
 
 5.2* Для scheduled handler'oв добавить в список scheduled_handler словарь вида:
 
@@ -47,13 +51,13 @@ from . import speak_plugin
 from . import vault_plugin
 from . import stop_plugin
 
-command_handlers = [{'commands': ['start'], 'handler': help_plugin.start_message},
-                    {'commands': ['help'], 'handler': help_plugin.help_message},
-                    {'commands': ['test'], 'handler': test_plugin.test_simple},
-                    {'commands': ['speak'], 'handler': speak_plugin.speak_message},
-                    {'commands': ['sub'], 'handler': vault_plugin.vault.sub},
-                    {'commands': ['unsub'], 'handler': vault_plugin.vault.unsub},
-                    {'commands': ['killall'], 'handler': stop_plugin.stop}]  # TODO сделать access level'ы
+command_handlers = [{'commands': ['start'], 'handler': help_plugin.start_message, 'access_level': 1},
+                    {'commands': ['help'], 'handler': help_plugin.help_message, 'access_level': 1},
+                    {'commands': ['test'], 'handler': test_plugin.test_simple, 'access_level': 1},
+                    {'commands': ['speak'], 'handler': speak_plugin.speak_message, 'access_level': 1},
+                    {'commands': ['sub'], 'handler': vault_plugin.vault.sub, 'access_level': 1},
+                    {'commands': ['unsub'], 'handler': vault_plugin.vault.unsub, 'access_level': 1},
+                    {'commands': ['stop'], 'handler': stop_plugin.stop, 'access_level': 2}]
 
 scheduled_handlers = [{'handler': vault_plugin.vault.scheduled, 'minutes': 1}]
 
