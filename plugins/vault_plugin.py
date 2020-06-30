@@ -3,7 +3,7 @@ from telebot import types as markups
 from database import Database
 from vault_api import Api
 from vault_api.types import DiffPost, Comment
-import log
+from utils import log
 from global_variables import RUNNING_FLAG, TELEGRAM_BOT
 
 

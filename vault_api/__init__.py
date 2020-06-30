@@ -1,5 +1,5 @@
 from .types import Stats, Comments, Diff, User, Node, Tag
-import log
+from utils import log
 import requests
 
 TEST_URL = 'https://staging.vault48.org:3334/'

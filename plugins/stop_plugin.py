@@ -1,4 +1,4 @@
-import log
+from utils import log
 from global_variables import RUNNING_FLAG, TELEGRAM_BOT
 
 

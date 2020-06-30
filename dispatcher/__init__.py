@@ -5,8 +5,8 @@ from typing import Optional, List
 from threading import Thread
 from datetime import datetime, timedelta
 from global_variables import RUNNING_FLAG
+from utils import log
 import time
-import log
 
 
 class Dispatcher(Thread):
