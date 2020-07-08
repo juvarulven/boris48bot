@@ -50,6 +50,7 @@ from . import help_plugin
 from . import speak_plugin
 from . import vault_plugin
 from . import stop_plugin
+from . import who_plugin
 
 command_handlers = [{'commands': ['start'], 'handler': help_plugin.start_message, 'access_level': 1},
                     {'commands': ['help'], 'handler': help_plugin.help_message, 'access_level': 1},
@@ -57,6 +58,7 @@ command_handlers = [{'commands': ['start'], 'handler': help_plugin.start_message
                     {'commands': ['speak'], 'handler': speak_plugin.speak_message, 'access_level': 1},
                     {'commands': ['sub'], 'handler': vault_plugin.vault.sub, 'access_level': 1},
                     {'commands': ['unsub'], 'handler': vault_plugin.vault.unsub, 'access_level': 1},
+                    {'commands': ['who'], 'handler': who_plugin.who, 'access_level': 2},
                     {'commands': ['stop'], 'handler': stop_plugin.stop, 'access_level': 2}]
 
 scheduled_handlers = [{'handler': vault_plugin.vault.scheduled, 'minutes': 1}]
