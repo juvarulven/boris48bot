@@ -1,7 +1,7 @@
 """
 Плагин реакции на команды /start и /help
 
-commands_list -- кортежей вида ('/команда: описание', уровень доступа)
+commands_list -- список кортежей вида ('/команда: описание', уровень доступа)
 """
 from global_variables import TELEGRAM_BOT
 
