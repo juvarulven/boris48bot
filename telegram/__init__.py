@@ -2,9 +2,8 @@
 Все что связано с телеграмом
 """
 import re
-from telebot import TeleBot, util
+from telebot import TeleBot, util, apihelper
 from database import Database
-from telebot import apihelper
 from config import BOT_OWNER_ID
 
 apihelper.ENABLE_MIDDLEWARE = True
@@ -124,3 +123,9 @@ class Bot(TeleBot):
         }
 
         return test_cases.get(message_filter, lambda msg: False)(message)
+
+    def get_user_access_level(self, user_id: int) -> int:
+        return self._users[str(user_id)]['access_level']
+
+    def get_users(self) -> dict:
+        return self._users.copy()
