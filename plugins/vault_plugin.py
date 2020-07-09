@@ -5,11 +5,12 @@ from vault_api import Api
 from vault_api.types import DiffPost, Comment
 from utils import log
 from global_variables import RUNNING_FLAG, TELEGRAM_BOT
+from config import VAULT_TEST
 
 
 class Vault:
-    def __init__(self):
-        self._api = Api(testing=True)
+    def __init__(self, testing):
+        self._api = Api(testing=testing)
         self._flow_messages: List[DiffPost] = []
         self._boris_messages: List[Comment] = []
         self._godnota_updates: List[str] = []
@@ -327,6 +328,6 @@ class Vault:
             self._send_godnota_message(title, node)
 
 
-vault = Vault()
+vault = Vault(VAULT_TEST)
 
 __all__ = ['vault']

@@ -1,0 +1,4 @@
+TOKEN: str = '123456789:abcdefghijklmnopqrstuvwxyz123456789'  # place your telegram bot token here
+BOT_OWNER_ID: int = 123456789  # place your telegram id here
+
+VAULT_TEST: bool = True  # True for interaction with staging.vault48.org, False for vault48.org
