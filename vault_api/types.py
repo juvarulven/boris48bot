@@ -1,3 +1,6 @@
+_URL = 'https://vault48.org:3333/'
+
+
 class Stats:
     def __init__(self, dictionary):
         self.users_total = dictionary['users']['total']
@@ -50,7 +53,7 @@ class File:
         self.orig_name = dictionary['orig_name']
         self.path = dictionary['path']
         self.full_path = dictionary['full_path']
-        self.url = dictionary['url']
+        self.url = dictionary['url'].replace('REMOTE_CURRENT://', _URL)
         self.size = dictionary['size']
         self.type = dictionary['type']
         self.mime = dictionary['mime']
@@ -88,7 +91,7 @@ class BasicPost:
         self.type = dictionary['type']
         self.created_at = dictionary['created_at']
         self.commented_at = dictionary['commented_at']
-        self.thumbnail = dictionary['thumbnail']
+        self.thumbnail = dictionary['thumbnail'].replace('REMOTE_CURRENT://', _URL) if dictionary['thumbnail'] else None
         self.description = dictionary['description']
 
 
@@ -129,7 +132,7 @@ class Tag:
 class Hero:
     def __init__(self, dictionary):
         self.id = dictionary['id']
-        self.thumbnail = dictionary['thumbnail']
+        self.thumbnail = dictionary['thumbnail'].replace('REMOTE_CURRENT://', _URL)
         self.title = dictionary['title']
 
 
