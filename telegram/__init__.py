@@ -1,6 +1,7 @@
 """
 Все что связано с телеграмом
 """
+from typing import Dict, List, Callable, Any, Union
 import re
 from telebot import TeleBot, util, apihelper
 from database import Database
@@ -82,25 +83,16 @@ class Bot(TeleBot):
         self.add_message_handler(handler_dict)
         return handler
 
-    def load_command_plugins(self, plugins_list: list) -> None:
+    def load_command_plugins(self, plugins_list: List[Dict[str, Union[List[str], Callable[[Any], None], int]]]) -> None:
         """
         Загрузка плагинов-обработчиков комманд из телеграма через self.message_handler()
 
-        :param plugins_list: список словарей вида [{'handler': функция-обработчик, 'command': ['команда'...]}...]
+        :param plugins_list: список словарей вида:
+            [{'commands': ['команда'...], 'handler': функция-обработчик, 'access_level': уровень доступа}...]
         :return: None
         """
         while plugins_list:
             plugin = plugins_list.pop()
-            assert isinstance(plugin, dict), \
-                'список плагинов содержит не словари: ' + repr(plugin)
-            assert len(plugin) == 3, \
-                'в словаре плагина неправильное число элементов: ' + repr(plugin)
-            assert hasattr(plugin['handler'], '__call__'), \
-                'в словаре плагина по ключу "function" содержится не функция: ' + repr(plugin)
-            assert isinstance(plugin['commands'], list), \
-                'в словаре плагина по ключу "commands" содержится не список: ' + repr(plugin)
-            assert all(list(map(lambda type_of: isinstance(type_of, str), plugin['commands']))), \
-                'в списке "commands" словаря плагина содержатся не строки: ' + repr(plugin)
             self.message_handler_method(plugin['handler'],
                                         commands=plugin['commands'],
                                         access_level=plugin['access_level'])

@@ -44,6 +44,7 @@ from . import my_plugin
 Если плагин должен уметь останавливать бота, нужно импортировать в него RUNNING_FLAG из global_variables.
 RUNNING_FLAG.value = False штатно остановит бота
 """
+from typing import Dict, List, Callable, Any, Union
 
 from . import test_plugin
 from . import help_plugin
@@ -52,15 +53,19 @@ from . import vault_plugin
 from . import stop_plugin
 from . import who_plugin
 
-command_handlers = [{'commands': ['start'], 'handler': help_plugin.start_message, 'access_level': 1},
-                    {'commands': ['help'], 'handler': help_plugin.help_message, 'access_level': 1},
-                    {'commands': ['test'], 'handler': test_plugin.test_simple, 'access_level': 1},
-                    {'commands': ['speak'], 'handler': speak_plugin.speak_message, 'access_level': 1},
-                    {'commands': ['sub'], 'handler': vault_plugin.vault.sub, 'access_level': 1},
-                    {'commands': ['unsub'], 'handler': vault_plugin.vault.unsub, 'access_level': 1},
-                    {'commands': ['who'], 'handler': who_plugin.who, 'access_level': 2},
-                    {'commands': ['stop'], 'handler': stop_plugin.stop, 'access_level': 2}]
+command_handlers: List[Dict[str, Union[List[str], Callable[[Any], None], int]]] = [
+    {'commands': ['start'], 'handler': help_plugin.start_message, 'access_level': 1},
+    {'commands': ['help'], 'handler': help_plugin.help_message, 'access_level': 1},
+    {'commands': ['test'], 'handler': test_plugin.test_simple, 'access_level': 1},
+    {'commands': ['speak'], 'handler': speak_plugin.speak_message, 'access_level': 1},
+    {'commands': ['sub'], 'handler': vault_plugin.vault.sub, 'access_level': 1},
+    {'commands': ['unsub'], 'handler': vault_plugin.vault.unsub, 'access_level': 1},
+    {'commands': ['who'], 'handler': who_plugin.who, 'access_level': 2},
+    {'commands': ['stop'], 'handler': stop_plugin.stop, 'access_level': 2}
+]
 
-scheduled_handlers = [{'handler': vault_plugin.vault.scheduled, 'minutes': 1}]
+scheduled_handlers: List[Dict[str, Union[Callable[[None], None]], int, float]] = [
+    {'handler': vault_plugin.vault.scheduled, 'minutes': 1}
+]
 
 __all__ = ['command_handlers', 'scheduled_handlers']
