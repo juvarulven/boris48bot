@@ -6,5 +6,5 @@
 
 [start.py](https://github.com/juvarulven/boris48bot/blob/master/start.py) -- точка входа
 
-[plugins](https://github.com/juvarulven/boris48bot/tree/master/plugins) -- пакет с плагинами (инструкция по добавлению в [__init__.py](https://github.com/juvarulven/boris48bot/blob/master/plugins/__init__.py))
+[plugins](https://github.com/juvarulven/boris48bot/tree/master/plugins) -- пакет с плагинами (инструкция по добавлению в [`__init__.py`](https://github.com/juvarulven/boris48bot/blob/master/plugins/__init__.py))
 
