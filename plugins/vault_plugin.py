@@ -243,11 +243,16 @@ class Vault:
         TELEGRAM_BOT.value.register_next_step_handler(message, self.unsub_next_step)
 
     def _send_image_message(self, post: DiffPost, link: str) -> None:
-        template = '_Скрывающийся под псевдонимом_ *~{}* _поделился фото в Течении:_' \
-                   '\n*{}*\n_и написал:_\n{}\n{}'
-        message = template.format(post.user.username, post.title, post.description, link)
+        thumbnail = post.thumbnail
+        template = '*{}*\n_Вот чем в Течении поделился скрывающийся под псевдонимом_ *~{}*' \
+                   ' _(и, возможно, это еще не все)_\n'
+        message = template.format(post.title, post.user.username)
+        description = post.description
+        if description:
+            message += '_а так же написал:_\n{}\n'.format(description)
+        message += link
         for addressee in self._last_updates['flow']['subscribers']:
-            TELEGRAM_BOT.value.send_message(addressee, message, parse_mode='Markdown')
+            TELEGRAM_BOT.value.send_message(addressee, thumbnail, caption=message, parse_mode='Markdown')
 
     def _send_text_message(self, post: DiffPost, link: str) -> None:
         template = '_Скрывающийся под псевдонимом_ *~{}* _поделился мыслями в Течении:_' \
