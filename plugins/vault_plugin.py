@@ -262,11 +262,25 @@ class Vault:
             TELEGRAM_BOT.value.send_message(addressee, message, parse_mode='Markdown')
 
     def _send_audio_message(self, post: DiffPost, link: str) -> None:
-        template = '_Скрывающийся под псевдонимом_ *~{}* _поделился аудиозаписью в Течении:_' \
-                   '\n*{}*\n_и написал:_\n{}\n{}'
-        message = template.format(post.user.username, post.title, post.description, link)
+        post_id = post.id
+        node = None
+        while not node:
+            node = self._api.get_node(post_id)
+        files = node.files
+        audio = None
+        for file in files:
+            audio = file.full_path
+            if audio[-4:] == 'mp3':
+                break
+        template = '{}\n Вот чем в Течении поделился скрывающийся под псевдонимом ~{}' \
+                   ' (и, возможно, это еще не все)\n'
+        message = template.format(node.title, post.user.username)
+        description = post.description
+        if description:
+            message += 'а так же написал:\n{}\n'.format(description)
+        message += link
         for addressee in self._last_updates['flow']['subscribers']:
-            TELEGRAM_BOT.value.send_message(addressee, message, parse_mode='Markdown')
+            TELEGRAM_BOT.value.send_audio(addressee, audio, caption=message)
 
     def _send_video_message(self, post: DiffPost, link: str) -> None:
         template = '_Скрывающийся под псевдонимом_ *~{}* _поделился видеозаписью в Течении:_' \
