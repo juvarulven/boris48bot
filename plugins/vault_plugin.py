@@ -262,19 +262,19 @@ class Vault:
             TELEGRAM_BOT.value.send_message(addressee, message, parse_mode='Markdown')
 
     def _send_audio_message(self, post: DiffPost, link: str) -> None:
-        template = '_Скрывающийся под псевдонимом_ *~{}* _поделился аудиозаписью в Течении:_\n{}'
+        template = '_Скрывающийся под псевдонимом_ *~{}* _поделился аудиозаписью в Течении (а может и не одной)._\n{}'
         message = template.format(post.user.username, link)
         for addressee in self._last_updates['flow']['subscribers']:
             TELEGRAM_BOT.value.message(addressee, message, parse_mode='Markdown')
 
     def _send_video_message(self, post: DiffPost, link: str) -> None:
-        template = '_Скрывающийся под псевдонимом_ *~{}* _поделился видеозаписью в Течении:_\n{}'
+        template = '_Скрывающийся под псевдонимом_ *~{}* _поделился видеозаписью в Течении._\n{}'
         message = template.format(post.user.username, link)
         for addressee in self._last_updates['flow']['subscribers']:
             TELEGRAM_BOT.value.send_message(addressee, message, parse_mode='Markdown')
 
     def _send_other_message(self, post: DiffPost, link: str) -> None:
-        template = '_Скрывающийся под псевдонимом_ *~{}* _поделился чем-то неординарным в Течении:_\n{}'
+        template = '_Скрывающийся под псевдонимом_ *~{}* _поделился чем-то неординарным в Течении._\n{}'
         message = template.format(post.user.username, link)
         for addressee in self._last_updates['flow']['subscribers']:
             TELEGRAM_BOT.value.send_message(addressee, message, parse_mode='Markdown')
@@ -289,6 +289,8 @@ class Vault:
             if comment.text:
                 text.append(comment.text)
         text = '\n\n_и продолжает:_\n\n'.join(text)
+        if not text:
+            text = '...'
         template = '_Скрывающийся под псевдонимом_ *~{}* _вот что пишет Борису:_' \
                    '\n\n{}{}\n{}'
         link = self._api.url + 'boris'

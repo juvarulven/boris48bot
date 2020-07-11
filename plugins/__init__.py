@@ -64,7 +64,7 @@ command_handlers: List[Dict[str, Union[List[str], Callable[[Any], None], int]]] 
     {'commands': ['stop'], 'handler': stop_plugin.stop, 'access_level': 2}
 ]
 
-scheduled_handlers: List[Dict[str, Union[Callable[[None], None]], int, float]] = [
+scheduled_handlers: List[Dict[str, Union[Callable[[None], None], int, float]]] = [
     {'handler': vault_plugin.vault.scheduled, 'minutes': 1}
 ]
 

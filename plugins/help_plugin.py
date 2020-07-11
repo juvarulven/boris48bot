@@ -17,7 +17,8 @@ commands_list = [('/start: отправлять приветствие', 1),
 
 def _generate_message(message, header_text, footer_text=""):
     access_level = TELEGRAM_BOT.value.get_user_access_level(message.from_user.id)
-    commands = [command[0] for command in filter(lambda item: item[1] >= access_level, commands_list)]
+    commands = [command[0] for command in filter(lambda item: item[1] <= access_level, commands_list)]
+    commands = '\n'.join(commands)
     return header_text + commands + footer_text
 
 
