@@ -30,7 +30,7 @@ def start_message(message):
 
 def help_message(message):
     answer = _generate_message(message, 'Вот что я умею:\n')
-    TELEGRAM_BOT.value.send_message(message.from_user_id, answer)
+    TELEGRAM_BOT.value.send_message(message.from_user.id, answer)
 
 
 __all__ = ['start_message', 'help_message']
