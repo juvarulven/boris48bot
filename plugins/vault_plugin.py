@@ -4,6 +4,7 @@ from database import Database
 from vault_api import Api
 from vault_api.types import DiffPost, Comment
 from utils import log
+from utils.string_functions import de_markdown
 from global_variables import RUNNING_FLAG, TELEGRAM_BOT
 from config import VAULT_TEST
 
@@ -246,10 +247,10 @@ class Vault:
         thumbnail = post.thumbnail
         template = '*{}*\n_Вот чем в Течении поделился скрывающийся под псевдонимом_ *~{}*' \
                    ' _(и, возможно, это еще не все)_\n'
-        message = template.format(post.title, post.user.username)
+        message = template.format(de_markdown(post.title), de_markdown(post.user.username))
         description = post.description
         if description:
-            message += '_а так же написал:_\n{}\n'.format(description)
+            message += '_а так же написал:_\n{}\n'.format(de_markdown(description))
         message += link
         for addressee in self._last_updates['flow']['subscribers']:
             TELEGRAM_BOT.value.send_message(addressee, thumbnail, caption=message, parse_mode='Markdown')
@@ -257,37 +258,39 @@ class Vault:
     def _send_text_message(self, post: DiffPost, link: str) -> None:
         template = '_Скрывающийся под псевдонимом_ *~{}* _поделился мыслями в Течении:_' \
                    '\n*{}*\n{}\n{}'
-        message = template.format(post.user.username, post.title, post.description, link)
+        message = template.format(de_markdown(post.user.username), de_markdown(post.title),
+                                  de_markdown(post.description), link)
         for addressee in self._last_updates['flow']['subscribers']:
             TELEGRAM_BOT.value.send_message(addressee, message, parse_mode='Markdown')
 
     def _send_audio_message(self, post: DiffPost, link: str) -> None:
         template = '_Скрывающийся под псевдонимом_ *~{}* _поделился аудиозаписью в Течении (а может и не одной)._\n{}'
-        message = template.format(post.user.username, link)
+        message = template.format(de_markdown(post.user.username), link)
         for addressee in self._last_updates['flow']['subscribers']:
             TELEGRAM_BOT.value.message(addressee, message, parse_mode='Markdown')
 
     def _send_video_message(self, post: DiffPost, link: str) -> None:
         template = '_Скрывающийся под псевдонимом_ *~{}* _поделился видеозаписью в Течении._\n{}'
-        message = template.format(post.user.username, link)
+        message = template.format(de_markdown(post.user.username), link)
         for addressee in self._last_updates['flow']['subscribers']:
             TELEGRAM_BOT.value.send_message(addressee, message, parse_mode='Markdown')
 
     def _send_other_message(self, post: DiffPost, link: str) -> None:
         template = '_Скрывающийся под псевдонимом_ *~{}* _поделился чем-то неординарным в Течении._\n{}'
-        message = template.format(post.user.username, link)
+        message = template.format(de_markdown(post.user.username), link)
         for addressee in self._last_updates['flow']['subscribers']:
             TELEGRAM_BOT.value.send_message(addressee, message, parse_mode='Markdown')
 
     def _send_boris_message(self, *comments):
         with_files = False
-        author = comments[0].user.username
+        author = de_markdown(comments[0].user.username)
         text = []
         for comment in comments:
             if comment.files:
                 with_files = True
             if comment.text:
                 text.append(comment.text)
+        text = list(map(de_markdown, filter(lambda item: bool(item), text)))
         text = '\n\n_и продолжает:_\n\n'.join(text)
         if not text:
             text = '...'
@@ -305,7 +308,7 @@ class Vault:
     def _send_godnota_message(self, title: str, node: int) -> None:
         template = '_В коллекции_ *{}* _появилось что-то новенькое_'
         link = self._api.post_url.format(node)
-        message = template.format(title, link)
+        message = template.format(de_markdown(title), link)
         for addressee in self._last_updates['comments'][node]['subscribers']:
             TELEGRAM_BOT.value.send_message(addressee, message, parse_mode='Markdown')
 
