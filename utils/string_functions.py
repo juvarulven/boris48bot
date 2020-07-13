@@ -1,4 +1,4 @@
-_MARKDOWN_CHARACTERS = '#*-+>`[]()_~!'
+_MARKDOWN_CHARACTERS = '*`[_'
 
 
 def de_markdown(string) -> str:

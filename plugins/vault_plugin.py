@@ -244,10 +244,10 @@ class Vault:
         TELEGRAM_BOT.value.register_next_step_handler(message, self.unsub_next_step)
 
     def _send_image_message(self, post: DiffPost, link: str) -> None:
+        user = self._generate_markdown_user_link(post.user.username)
         thumbnail = post.thumbnail
-        template = '*{}*\n_Вот чем в Течении поделился скрывающийся под псевдонимом_ *~{}*' \
-                   ' _(и, возможно, это еще не все)_\n'
-        message = template.format(de_markdown(post.title), de_markdown(post.user.username))
+        template = '*{}*\n_Вот чем в Течении поделился_ {} _(и, возможно, это еще не все)_\n'
+        message = template.format(de_markdown(post.title), user)
         description = post.description
         if description:
             message += '_а так же написал:_\n{}\n'.format(de_markdown(description))
@@ -256,34 +256,37 @@ class Vault:
             TELEGRAM_BOT.value.send_message(addressee, thumbnail, caption=message, parse_mode='Markdown')
 
     def _send_text_message(self, post: DiffPost, link: str) -> None:
-        template = '_Скрывающийся под псевдонимом_ *~{}* _поделился мыслями в Течении:_' \
-                   '\n*{}*\n{}\n{}'
-        message = template.format(de_markdown(post.user.username), de_markdown(post.title),
+        user = self._generate_markdown_user_link(post.user.username)
+        template = '{} _поделился мыслями в Течении:_\n*{}*\n{}\n{}'
+        message = template.format(user, de_markdown(post.title),
                                   de_markdown(post.description), link)
         for addressee in self._last_updates['flow']['subscribers']:
             TELEGRAM_BOT.value.send_message(addressee, message, parse_mode='Markdown')
 
     def _send_audio_message(self, post: DiffPost, link: str) -> None:
-        template = '_Скрывающийся под псевдонимом_ *~{}* _поделился аудиозаписью в Течении (а может и не одной)._\n{}'
-        message = template.format(de_markdown(post.user.username), link)
+        user = self._generate_markdown_user_link(post.user.username)
+        template = '{} _поделился аудиозаписью в Течении (а может и не одной)._\n{}'
+        message = template.format(user, link)
         for addressee in self._last_updates['flow']['subscribers']:
             TELEGRAM_BOT.value.message(addressee, message, parse_mode='Markdown')
 
     def _send_video_message(self, post: DiffPost, link: str) -> None:
-        template = '_Скрывающийся под псевдонимом_ *~{}* _поделился видеозаписью в Течении._\n{}'
-        message = template.format(de_markdown(post.user.username), link)
+        user = self._generate_markdown_user_link(post.user.username)
+        template = '{} _поделился видеозаписью в Течении._\n{}'
+        message = template.format(user, link)
         for addressee in self._last_updates['flow']['subscribers']:
             TELEGRAM_BOT.value.send_message(addressee, message, parse_mode='Markdown')
 
     def _send_other_message(self, post: DiffPost, link: str) -> None:
-        template = '_Скрывающийся под псевдонимом_ *~{}* _поделился чем-то неординарным в Течении._\n{}'
-        message = template.format(de_markdown(post.user.username), link)
+        user = self._generate_markdown_user_link(post.user.username)
+        template = '{} _поделился чем-то неординарным в Течении._\n{}'
+        message = template.format(user, link)
         for addressee in self._last_updates['flow']['subscribers']:
             TELEGRAM_BOT.value.send_message(addressee, message, parse_mode='Markdown')
 
     def _send_boris_message(self, *comments):
         with_files = False
-        author = de_markdown(comments[0].user.username)
+        user = self._generate_markdown_user_link(comments[0].user.username)
         text = []
         for comment in comments:
             if comment.files:
@@ -294,23 +297,31 @@ class Vault:
         text = '\n\n_и продолжает:_\n\n'.join(text)
         if not text:
             text = '...'
-        template = '_Скрывающийся под псевдонимом_ *~{}* _вот что пишет Борису:_' \
-                   '\n\n{}{}\n{}'
+        template = '_Вот что_ {} _пишет Борису:_\n\n{}{}\n{}'
         link = self._api.url + 'boris'
         if with_files:
             with_files = '\n\n_да вдобавок прикрепляет какие-то прикрепления!_'
         else:
             with_files = ''
-        message = template.format(author, text, with_files, link)
+        message = template.format(user, text, with_files, link)
         for addressee in self._last_updates['boris']['subscribers']:
             TELEGRAM_BOT.value.send_message(addressee, message, parse_mode='Markdown')
 
     def _send_godnota_message(self, title: str, node: int) -> None:
-        template = '_В коллекции_ *{}* _появилось что-то новенькое_'
-        link = self._api.post_url.format(node)
-        message = template.format(de_markdown(title), link)
+        template = '_В коллекции_ {} _появилось что-то новенькое_'
+        url = '{}post{}'.format(self._api.url, node)
+        link = '[{}]({})'.format(title, url)
+        message = template.format(link)
         for addressee in self._last_updates['comments'][node]['subscribers']:
             TELEGRAM_BOT.value.send_message(addressee, message, parse_mode='Markdown')
+
+    def _generate_markdown_user_link(self, username: str) -> str:
+        """
+        Возвращает традиционную ссылку на пользователя убежища в маркдаун формате
+        :param username: имя пользователя убежища
+        :return: строка вида '[~username](https://vault48.org/~username)'
+        """
+        return '[~{}]({}~{})'.format(username, self._api.url, username)
 
     def scheduled(self):
         post_types: Dict[str, Callable[[DiffPost, str], None]] = {'image': self._send_image_message,
@@ -322,7 +333,7 @@ class Vault:
         while self._flow_messages:
             post = self._flow_messages.pop()
             if post.type in post_types:
-                link = self._api.post_url.format(post.id)
+                link = '{}post{}'.format(self._api.url, post.id)
                 post_types[post.type](post, link)
         while self._boris_messages:
             comments = [self._boris_messages.pop()]
