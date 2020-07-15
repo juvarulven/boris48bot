@@ -44,11 +44,13 @@ class Api:
 
     def get_recent(self):
         response = self.get_diff(with_recent=True)
-        return response.recent
+        if response:
+            return response.recent
 
     def get_heroes(self):
         response = self.get_diff(with_heroes=True)
-        return response.heroes
+        if response:
+            return response.heroes
 
     def get_comments(self, node, take, skip=0):
         params = {'take': take,
