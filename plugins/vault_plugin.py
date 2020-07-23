@@ -168,6 +168,12 @@ class Vault:
         return need_update_db
 
     def sub(self, message):
+        """
+        Хэндлер команды "/sub" из телеграмма. Рисует клавиатуру и регистрирует self.sub_next_step() как
+        обработчик следующего шага
+        :param message: объект сообщения из телеграмма
+        :return:
+        """
         telegram_id = message.from_user.id
         markup = markups.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
         markup.add(markups.KeyboardButton('Течение'), markups.KeyboardButton('Борис'),
@@ -177,6 +183,12 @@ class Vault:
         TELEGRAM_BOT.value.register_next_step_handler(message, self.sub_next_step)
 
     def sub_next_step(self, message):
+        """
+        Обработчик следующего шага от комманды "/sub" телеграмма. Добавляет подписчиков в базу и регистрирует сам
+        себя как обработчик следующего шага, пока пользователь не нажмет "Закончить"
+        :param message: объект соощения телеграмма
+        :return:
+        """
         text = message.text
         telegram_id = message.from_user.id
         if text == 'Течение':
@@ -206,6 +218,12 @@ class Vault:
         TELEGRAM_BOT.value.register_next_step_handler(message, self.sub_next_step)
 
     def unsub(self, message):
+        """
+        Хэндлер команды "/unsub" из телеграмма. Рисует клавиатуру и регистрирует self.unsub_next_step() как
+        обработчик следующего шага
+        :param message: объект сообщения из телеграмма
+        :return:
+        """
         telegram_id = message.from_user.id
         markup = markups.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
         markup.add(markups.KeyboardButton('Течение'), markups.KeyboardButton('Борис'),
@@ -215,6 +233,12 @@ class Vault:
         TELEGRAM_BOT.value.register_next_step_handler(message, self.unsub_next_step)
 
     def unsub_next_step(self, message):
+        """
+        Обработчик следующего шага от комманды "/unsub" телеграмма. Добавляет подписчиков в базу и регистрирует сам
+        себя как обработчик следующего шага, пока пользователь не нажмет "Закончить"
+        :param message: объект соощения телеграмма
+        :return:
+        """
         telegram_id = message.from_user.id
         text = message.text
         if text == 'Течение':
@@ -245,41 +269,45 @@ class Vault:
 
     def _send_image_message(self, post: DiffPost, link: str) -> None:
         user = self._generate_markdown_user_link(post.user.username)
+        title = de_markdown(post.title) if post.title else "......."
         thumbnail = post.thumbnail
-        template = '*{}*\n_Вот чем в Течении поделился_ {} _(и, возможно, это еще не все)_\n'
-        message = template.format(de_markdown(post.title), user)
+        template = '\n[{}]({})\n_Вот чем в Течении делится_ {} _(и, возможно, это еще не все)_'
+        message = template.format(title, link, user)
         description = post.description
         if description:
-            message += '_а так же написал:_\n{}\n'.format(de_markdown(description))
-        message += link
-        for addressee in self._last_updates['flow']['subscribers']:
-            TELEGRAM_BOT.value.send_message(addressee, thumbnail, caption=message, parse_mode='Markdown')
+            message += '\n_да вдобавок пишет:_\n\n{}'.format(de_markdown(description))
+        try:
+            for addressee in self._last_updates['flow']['subscribers']:
+                TELEGRAM_BOT.value.send_photo(addressee, thumbnail, caption=message, parse_mode='Markdown')
+        except Exception as error:
+            error_message = 'vault_plugin: Ошибка при попытке отправить фото в телеграмм: ' + str(error)
+            log.log(error_message)
 
     def _send_text_message(self, post: DiffPost, link: str) -> None:
         user = self._generate_markdown_user_link(post.user.username)
-        template = '{} _поделился мыслями в Течении:_\n*{}*\n{}\n{}'
-        message = template.format(user, de_markdown(post.title),
-                                  de_markdown(post.description), link)
+        template = '{} _делится мыслями в Течении:_\n\n[{}]({})\n{}'
+        title = de_markdown(post.title) if post.title else "......."
+        message = template.format(user, title, link, de_markdown(post.description))
         for addressee in self._last_updates['flow']['subscribers']:
             TELEGRAM_BOT.value.send_message(addressee, message, parse_mode='Markdown')
 
     def _send_audio_message(self, post: DiffPost, link: str) -> None:
         user = self._generate_markdown_user_link(post.user.username)
-        template = '{} _поделился аудиозаписью в Течении (а может и не одной)._\n{}'
+        template = '{} _делится_ [аудиозаписью]({}) _в Течении (а может и не одной)._'
         message = template.format(user, link)
         for addressee in self._last_updates['flow']['subscribers']:
             TELEGRAM_BOT.value.message(addressee, message, parse_mode='Markdown')
 
     def _send_video_message(self, post: DiffPost, link: str) -> None:
         user = self._generate_markdown_user_link(post.user.username)
-        template = '{} _поделился видеозаписью в Течении._\n{}'
+        template = '{} _делится_ [видеозаписью]({}) _в Течении._'
         message = template.format(user, link)
         for addressee in self._last_updates['flow']['subscribers']:
             TELEGRAM_BOT.value.send_message(addressee, message, parse_mode='Markdown')
 
     def _send_other_message(self, post: DiffPost, link: str) -> None:
         user = self._generate_markdown_user_link(post.user.username)
-        template = '{} _поделился чем-то неординарным в Течении._\n{}'
+        template = '{} _делится чем-то_ [неординарным]({}) _в Течении._'
         message = template.format(user, link)
         for addressee in self._last_updates['flow']['subscribers']:
             TELEGRAM_BOT.value.send_message(addressee, message, parse_mode='Markdown')
@@ -297,13 +325,13 @@ class Vault:
         text = '\n\n_и продолжает:_\n\n'.join(text)
         if not text:
             text = '...'
-        template = '_Вот что_ {} _пишет Борису:_\n\n{}{}\n{}'
+        template = '_Вот что_ {} _пишет_ [Борису]({})_:_\n\n{}{}'
         link = self._api.url + 'boris'
         if with_files:
             with_files = '\n\n_да вдобавок прикрепляет какие-то прикрепления!_'
         else:
             with_files = ''
-        message = template.format(user, text, with_files, link)
+        message = template.format(user, link, text, with_files)
         for addressee in self._last_updates['boris']['subscribers']:
             TELEGRAM_BOT.value.send_message(addressee, message, parse_mode='Markdown')
 
@@ -324,11 +352,15 @@ class Vault:
         return '[~{}]({}~{})'.format(username, self._api.url, username)
 
     def scheduled(self):
+        """
+        Запускает апдейт и рассылает сообщения по таймеру
+        """
         post_types: Dict[str, Callable[[DiffPost, str], None]] = {'image': self._send_image_message,
                                                                   'text': self._send_text_message,
                                                                   'audio': self._send_audio_message,
                                                                   'video': self._send_video_message,
                                                                   'other': self._send_other_message}
+        messages_temp_stack = []
         self._check_updates()
         while self._flow_messages:
             post = self._flow_messages.pop()
