@@ -104,10 +104,12 @@ class Vault:
 
     def _check_updates(self) -> None:
         stats = self._api.get_stats()
-        need_update_db = []
         if stats is not None:
             need_update_db = [self._update_flow(stats.timestamps_flow),
                               self._update_boris(stats.timestamps_boris, stats.comments_total)]
+        else:
+            log.log('vault_plugin: не удалось получить stats Убежища.')
+            return
         need_update_db.append(self._update_godnota())
         if stats.comments_total != self._last_updates['comments_count']:
             self._last_updates['comments_count'] = stats.comments_total
@@ -360,7 +362,6 @@ class Vault:
                                                                   'audio': self._send_audio_message,
                                                                   'video': self._send_video_message,
                                                                   'other': self._send_other_message}
-        messages_temp_stack = []
         self._check_updates()
         while self._flow_messages:
             post = self._flow_messages.pop()
