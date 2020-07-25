@@ -3,11 +3,13 @@ from database import Database
 from global_variables import TELEGRAM_BOT, RUNNING_FLAG
 from vault_api import Api
 from config import VAULT_TEST
+from utils import log
+from utils.string_functions import de_markdown
 
 
 class Main:
     """
-    Главный класс бота
+    Главный класс плагина
     """
     def __init__(self, testing):
         self._db = DB()
@@ -195,6 +197,15 @@ class DB:
             self._comments[node_id] = temp_document
             self._update_db(node_id)
 
+    def get_comments_nodes(self) -> list:
+        """
+        Возвращает список кортежей с id нод и их заголовками
+        :return: [ ('node_id', 'title')... ]
+        """
+        nodes_list = []
+        for node_id in self._comments:
+            nodes_list.append((node_id, self._comments[node_id]['title']))
+        return nodes_list
 
 
 class Vault:
@@ -214,6 +225,91 @@ class Telegram:
     """
     def __init__(self):
         self._bot = TELEGRAM_BOT.value
+
+    def send_message(self, message_type: str, subscribers: List[Union[str, int]], *args, **kwargs):
+        if message_type == 'image' and 'image_url' in kwargs:
+            image_url = kwargs.pop('image_url')
+            message = self._generate_image_message(*args, **kwargs)
+            self._send_photo(subscribers, image_url, message)
+            return
+        elif message_type == 'text':
+            message = self._generate_text_message(*args, **kwargs)
+        elif message_type == 'audio':
+            message = self._generate_audio_message(*args, **kwargs)
+        elif message_type == 'video':
+            message = self._generate_video_message(*args, **kwargs)
+        elif message_type == 'other':
+            message = self._generate_other_message(*args, **kwargs)
+        elif message_type == 'boris':
+            message = self._generate_boris_message(*args, **kwargs)
+        elif message_type == 'godnota':
+            message = self._generate_godnota_message(*args, **kwargs)
+        else:
+            return
+        self._send_text(subscribers, message)
+
+    def _send_text(self, subscribers: List[Union[str, int]], text: str):
+        for addressee in subscribers:
+            try:
+                self._bot.send_message(addressee, text, parse_mode='Markdown')
+            except Exception as error:
+                error_message = 'vault_plugin: Ошибка при попытке отправить сообщение в телеграмм: ' + str(error)
+                log.log(error_message)
+
+    def _send_photo(self, subscribers: List[Union[str, int]], url: str, text: str):
+        for addressee in subscribers:
+            try:
+                self._bot.send_photo(addressee, url, caption=text, parse_mode='Markdown')
+            except Exception as error:
+                error_message = 'vault_plugin: Ошибка при попытке отправить фото в телеграмм: ' + str(error)
+                log.log(error_message)
+
+    @staticmethod
+    def _generate_image_message(title: str, url: str, username: str, user_url: str, description: str = "") -> str:
+        template = '\n[{}]({})\n_Вот чем в Течении делится_ [~{}]({}) _(и, возможно, это еще не все)_'
+        with_description = '\n_да вдобавок пишет:_\n\n{}'
+        message = template.format(de_markdown(title), url, de_markdown(username), user_url)
+        if description:
+            message += with_description.format(de_markdown(description))
+        return message
+
+    @staticmethod
+    def _generate_text_message(username: str, user_url: str, title: str, url: str, description: str) -> str:
+        template = '[~{}]({}) _делится мыслями в Течении:_\n\n[{}]({})\n{}'
+        return template.format(de_markdown(username), user_url, de_markdown(title), url, de_markdown(description))
+
+    @staticmethod
+    def _generate_audio_message(username: str, user_url: str, url: str) -> str:
+        template = '[~{}]({}) _делится_ [аудиозаписью]({}) _в Течении (а может и не одной)._'
+        return template.format(de_markdown(username), user_url, url)
+
+    @staticmethod
+    def _generate_video_message(username: str, user_url: str, url: str) -> str:
+        template = '[~{}]({}) _делится_ [видеозаписью]({}) _в Течении._'
+        return template.format(de_markdown(username), user_url, url)
+
+    @staticmethod
+    def _generate_other_message(username: str, user_url: str, url: str) -> str:
+        template = '[~{}]({}) _делится чем-то_ [неординарным]({}) _в Течении._'
+        return template.format(de_markdown(username), user_url, url)
+
+    @staticmethod
+    def _generate_boris_message(username, user_url, url, comments: List[str], with_files = False) -> str:
+        template = '_Вот что_ [~{}]({}) _пишет_ [Борису]({})_:_\n\n{}'
+        separator = '\n\n_и продолжает:_\n\n'
+        with_f = '\n\n_да вдобавок прикрепляет какие-то прикрепления!_'
+        comments = list(map(de_markdown, comments))
+        comments = separator.join(comments)
+        message = template.format(de_markdown(username), user_url, url, comments)
+        if with_files:
+            message += with_f
+        return message
+
+    @staticmethod
+    def _generate_godnota_message(title, url) -> str:
+        template = '_В коллекции_ [{}]({}) _появилось что-то новенькое_'
+        return template.format(de_markdown(title), url)
+
 
 
 vault = Main(VAULT_TEST)
