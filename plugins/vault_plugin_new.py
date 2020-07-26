@@ -1,10 +1,11 @@
-from typing import List, Dict, Union, Optional
+from typing import List, Dict, Union, Optional, Callable, Any
 from database import Database
 from global_variables import TELEGRAM_BOT, RUNNING_FLAG
 from vault_api import Api
 from config import VAULT_TEST
 from utils import log
 from utils.string_functions import de_markdown
+import requests
 
 
 class Main:
@@ -19,7 +20,13 @@ class Main:
         self._init_db()
 
     def _init_db(self):
-        if not self._db.first_load():
+        if self._db.first_load():
+            return
+        flow_timestamp, boris_timestamp = self._vault.get_flow_and_boris_timestamps()
+        if not flow_timestamp or not boris_timestamp:
+            return
+        self._db.set_timestamp('flow', flow_timestamp)
+        self._db.set_timestamp('boris', boris_timestamp)
 
 
     def sub(self):
@@ -79,7 +86,7 @@ class DB:
         self._db.update_document(target, fields_with_content=temp_document)
         self._db.save_and_update()
 
-    def get_timestamp(self, target: Union[int, str]) -> Optional[str]:
+    def get_timestamp(self, target: str) -> Optional[str]:
         """
         Возвращает таймстамп
         :param target: 'flow', 'boris' или id ноды
@@ -90,11 +97,10 @@ class DB:
         elif target == 'boris':
             return self._boris_timestamp
         else:
-            target = str(target)
             if target.isdigit() and target in self._comments:
                 return self._comments[target]['timestamp']
 
-    def set_timestamp(self, target: Union[int, str], timestamp: str) -> None:
+    def set_timestamp(self, target: str, timestamp: str) -> None:
         """
         Устанавливает таймстамп и сохраняет в базу
         :param target: 'flow', 'boris' или id ноды
@@ -108,13 +114,11 @@ class DB:
             self._boris_timestamp = timestamp
             self._update_db('boris')
         else:
-            target = str(target)
-            if target.isdigit():
-                if target in self._comments:
-                    self._comments[target]["timestamp"] = timestamp
-                    self._update_db(target)
+            if target.isdigit() and target in self._comments:
+                self._comments[target]["timestamp"] = timestamp
+                self._update_db(target)
 
-    def get_subscribers(self, target: Union[str, int]) -> List[int]:
+    def get_subscribers(self, target: str) -> List[int]:
         """
         Возвращает список подписчиков
         :param target: 'flow', 'boris' или id ноды Убежища
@@ -125,13 +129,12 @@ class DB:
         elif target == 'boris':
             return self._boris_subscribers.copy()
         else:
-            target = str(target)
             if target in self._comments:
                 return self._comments[target]['subscribers'].copy()
             return []
 
 
-    def add_subscriber(self, target: Union[str, int], telegram_id: int) -> bool:
+    def add_subscriber(self, target: str, telegram_id: int) -> bool:
         """
         Добавляет id телеграмма в список подписчиков и сохраняет в базу
         :param target: 'flow', 'boris' или id ноды
@@ -150,14 +153,13 @@ class DB:
                 self._update_db('boris')
                 successfully = True
         else:
-            target = str(target)
             if target.isdigit() and target not in self._comments[target]['subscribers']:
                 self._comments[target]['subscribers'].append(telegram_id)
                 self._update_db(target)
                 successfully = True
         return successfully
 
-    def remove_subscriber(self, target: Union[str, int], telegram_id: int) -> bool:
+    def remove_subscriber(self, target: str, telegram_id: int) -> bool:
         """
         Удаляет id телеграмма из списка подписчиков и сохраняет в базу
         :param target: 'flow', 'boris' или id ноды
@@ -176,14 +178,13 @@ class DB:
                 self._update_db('boris')
                 successfully = True
         else:
-            target = str(target)
             if target.isdigit() and target in self._comments[target]['subscribers']:
                 self._comments[target]['subscribers'].remove(telegram_id)
                 self._update_db(target)
                 successfully = True
         return successfully
 
-    def add_comments(self, node_id: Union[str, int], title: str, timestamp: str) -> None:
+    def add_comments(self, node_id: str, title: str, timestamp: str) -> None:
         """
         Добавляет ноды с комментариями и сохраняет в базу
         :param node_id: id ноды
@@ -191,7 +192,6 @@ class DB:
         :param timestamp: таймстамп последнего комментария ноды
         :return:
         """
-        node_id = str(node_id)
         if node_id not in self._comments:
             temp_document = {'title': title, 'timestamp': timestamp, 'subscribers': []}
             self._comments[node_id] = temp_document
@@ -202,10 +202,7 @@ class DB:
         Возвращает список кортежей с id нод и их заголовками
         :return: [ ('node_id', 'title')... ]
         """
-        nodes_list = []
-        for node_id in self._comments:
-            nodes_list.append((node_id, self._comments[node_id]['title']))
-        return nodes_list
+        return [(node_id, self._comments[node_id]['title']) for node_id in self._comments]
 
 
 class Vault:
@@ -215,8 +212,33 @@ class Vault:
     def __init__(self, testing):
         self._api = Api(testing)
 
-    def check_updates(self, **kwargs):
-        pass
+    @staticmethod
+    def _do_it_5_times(what_to_do: Callable[[Any], Any], *args, **kwargs) -> Any:
+        """
+        Выполняет функцию пять раз. Если функция ничего не возвращает -- пишет в лог и останавливает бота
+        :param what_to_do: функция, которую следует выполнить 5 раз
+        :param args: позиционные аргументы для этой функции
+        :param kwargs: именованные аргументы для этой функции
+        :return: результат выполнения функции
+        """
+        response = None
+        try_counter = 5
+        while response is None and try_counter:
+            response = what_to_do(*args, **kwargs)
+            try_counter -= 1
+        if response is None:
+            RUNNING_FLAG.value = False
+            log.log('vault_plugin: ошибка при попытке сделать {} 5 раз'.format(what_to_do.__name__))
+            return
+        return response
+
+    def get_flow_and_boris_timestamps(self):
+        stats = self._do_it_5_times(self._api.get_stats)
+        if stats is None:
+            return '', ''
+        return stats.timestamps_flow, stats.timestamps_boris
+
+    def get_godnota(self):
 
 
 class Telegram:

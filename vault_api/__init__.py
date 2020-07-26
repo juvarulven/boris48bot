@@ -1,3 +1,4 @@
+from typing import Dict, Optional
 from .types import Stats, Comments, Diff, User, Node, Tag
 from utils import log
 import requests
@@ -64,7 +65,11 @@ class Api:
     def get_boris(self, take, skip=0):
         return self.get_comments(self.boris_node, take, skip)
 
-    def get_godnota(self):
+    def get_godnota(self) -> Optional[Dict[str, int]]:
+        """
+        Возвращает словарь нод, составленный из ответа Убежища через поиск по тегу '/годнота'
+        :return: словарь вида {'title': node_id...}
+        """
         node_names_and_ids = {'Хорошей музыки тред': 1691}
         try:
             response = get_json(self._related_url.format(1691))['related']['albums']['/годнота']
