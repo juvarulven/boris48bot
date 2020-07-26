@@ -239,6 +239,11 @@ class Vault:
         return stats.timestamps_flow, stats.timestamps_boris
 
     def get_godnota(self):
+        godnota = self._do_it_5_times(self._api.get_godnota)
+        if godnota is None:
+            return
+        else:
+            return [(str(godnota[title]), title) for title in godnota]
 
 
 class Telegram:
