@@ -22,15 +22,30 @@ class Api:
         self._related_url = url + 'node/{}/related'
         self.boris_node = 696
 
-    def get_stats(self):
+    def get_stats(self) -> Optional[Stats]:
+        """
+        Получает /stats Убежища
+        :return: Stats объект или None в случае провала
+        """
         try:
             return Stats(get_json(self._stats_url))
         except Exception as error:
             error_message = 'vault_api: Ошибка при попытке получить stats Убежища: ' + str(error)
             log.log(error_message)
 
-    def get_diff(self, start=None, end=None, with_heroes=False,
-                 with_updated=False, with_recent=False, with_valid=False):
+    def get_diff(self, start="", end="", with_heroes=False, with_updated=False,
+                 with_recent=False, with_valid=False) -> Optional[Diff]:
+        """
+        Получает /node/diff Убежища. Если start и end пусты -- поля before и after будут пусты
+
+        :param start: таймстамп формата 'YYYY-MM-DDTHH:MM:SS.uuuZ'
+        :param end: таймстамп формата 'YYYY-MM-DDTHH:MM:SS.uuuZ'
+        :param with_heroes:
+        :param with_updated:
+        :param with_recent:
+        :param with_valid:
+        :return: Diff объект или None в случае провала
+        """
         params = {'start': start,
                   'end': end,
                   'with_heroes': str(with_heroes).lower(),

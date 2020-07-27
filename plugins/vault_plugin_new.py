@@ -1,4 +1,4 @@
-from typing import List, Dict, Tuple, Union, Optional, Callable, Any
+from typing import List, Dict, Tuple, Union, Optional, Callable, Iterator, Any
 from database import Database
 from global_variables import TELEGRAM_BOT, RUNNING_FLAG
 from vault_api import Api
@@ -255,28 +255,29 @@ class Vault:
             return
         return comment_tuple[1]
 
-    def get_comments(self, node_id, number=10):
+    def get_comments(self, node_id, number=10) -> Optional[Tuple[List[Tuple[str, str, List[str], bool]], str]]:
         comments_obj = self._api.get_comments(node_id, number)
         if comments_obj is None:
             return
         current_timestamp = comments_obj.comments[0].created_at
         comment_objects_list = comments_obj.comments
-        return [comments for comments in self._build_comment_list_item(comment_objects_list)], current_timestamp
+        return [comment for comment in self._build_comment_list_item(comment_objects_list)], current_timestamp
 
-    def _build_comment_list_item(self, comments_list: List[Comment]) -> Tuple[str, str, List[str], bool]:
+    def _build_comment_list_item(self, comments_list: List[Comment]) -> Iterator[Tuple[str, str, List[str], bool]]:
         while comments_list:
             comment = comments_list.pop()
             username = comment.user.username
             user_url = self._generate_user_url(username)
-            with_file = bool(comment.files)
+            with_file = [bool(comment.files)]
             comment_texts_list = [comment.text]
             while comments_list and username == comments_list[-1].user.username:
-                comment_texts_list.append(comments_list.pop)
-            yield username, user_url, comment_texts_list, with_file
+                comment = comments_list.pop()
+                comment_texts_list.append(comment.text)
+                with_file.append(bool(comment.files))
+            yield username, user_url, comment_texts_list, any(with_file)
 
     def _generate_user_url(self, username: str) -> str:
         return self._api.url + '~' + username
-
 
 
 class Telegram:
