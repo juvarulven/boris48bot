@@ -1,5 +1,5 @@
-from typing import Dict, Union, Optional
-from .types import Stats, Comments, Diff, User, Node, Tag
+from typing import Dict, List, Union, Optional
+from .types import Stats, DiffPost, Hero, Comments, Diff, User, Node, Tag
 from utils import log
 import requests
 
@@ -25,6 +25,7 @@ class Api:
     def get_stats(self) -> Optional[Stats]:
         """
         Получает /stats Убежища
+
         :return: Stats объект или None в случае провала
         """
         try:
@@ -58,17 +59,35 @@ class Api:
             error_message = 'vault_api: Ошибка при попытке получить diff Убежища: ' + str(error)
             log.log(error_message)
 
-    def get_recent(self):
+    def get_recent(self) -> Optional[List[DiffPost]]:
+        """
+        Возвращает список из поля Diff.recent
+
+        :return: список DiffPost объектов или None в случае неудачи
+        """
         response = self.get_diff(with_recent=True)
         if response:
             return response.recent
 
-    def get_heroes(self):
+    def get_heroes(self) -> Optional[List[Hero]]:
+        """
+        Возвращает список из поля Diff.heroes
+
+        :return: список Hero объектов или None в случае неудачи
+        """
         response = self.get_diff(with_heroes=True)
         if response:
             return response.heroes
 
     def get_comments(self, node: Union[str, int], take: Union[str, int], skip=0) -> Optional[Comments]:
+        """
+        Получает /node/[node_id]/comment
+
+        :param node: id ноды
+        :param take: сколько взять
+        :param skip: сколько пропустить
+        :return: Comments объект или None в случае неудачи
+        """
         params = {'take': take,
                   'skip': skip}
         try:
@@ -77,12 +96,20 @@ class Api:
             error_message = 'vault_api: Ошибка при попытке получить comments Убежища: ' + str(error)
             log.log(error_message)
 
-    def get_boris(self, take, skip=0):
+    def get_boris(self, take: Union[int, str], skip=0) -> Optional[Comments]:
+        """
+        Возвращает комментарии Бориса
+
+        :param take: сколько получить
+        :param skip: сколько пропустить
+        :return: Comments объект или None в случае неудачи
+        """
         return self.get_comments(self.boris_node, take, skip)
 
     def get_godnota(self) -> Optional[Dict[str, int]]:
         """
         Возвращает словарь нод, составленный из ответа Убежища через поиск по тегу '/годнота'
+
         :return: словарь вида {'title': node_id...}
         """
         node_names_and_ids = {'Хорошей музыки тред': 1691}
@@ -96,7 +123,13 @@ class Api:
             node_names_and_ids[node['title']] = node['id']
         return node_names_and_ids
 
-    def get_node(self, node):
+    def get_node(self, node: Union[int, str]) -> Node:
+        """
+        Получает /node/[node_id] Убежища
+
+        :param node: id ноды
+        :return: Node объект или None в случае неудачи
+        """
         try:
             return Node(get_json(self._node_url.format(node)))
         except Exception as error:
@@ -104,7 +137,14 @@ class Api:
             log.log(error_message)
 
 
-def get_json(url, **params):
+def get_json(url: str, **params) -> dict:
+    """
+    Идет по ссылке и возвращает json ответ ввиде словаря
+
+    :param url: интернет ссылка
+    :param params: параметры
+    :return: словарь или None в случае неудачи
+    """
     response = requests.get(url, **params)
     if response.status_code == 200:
         return response.json()
