@@ -138,4 +138,10 @@ class Hero:
         self.title: str = dictionary['title']
 
 
-__all__ = ['Stats', 'Comments', 'Diff', 'User', 'Node', 'Tag', 'Comment', 'BasicUser', 'DiffPost', 'Node', 'Hero']
+class VaultApiException(Exception):
+    def __init__(self, message):
+        super().__init__('A request to the Vault API was unsuccessful: {}'.format(message))
+
+
+__all__ = ['Stats', 'Comments', 'Diff', 'User', 'Node', 'Tag', 'Comment',
+           'BasicUser', 'DiffPost', 'Node', 'Hero', 'VaultApiException']

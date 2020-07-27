@@ -2,11 +2,15 @@ from typing import List, Dict, Tuple, Union, Optional, Callable, Iterator, Any
 from database import Database
 from global_variables import TELEGRAM_BOT, RUNNING_FLAG
 from vault_api import Api
-from vault_api.types import Comment
+from vault_api.types import Comment, VaultApiException
 from config import VAULT_TEST
 from utils import log
 from utils.string_functions import de_markdown
-import requests
+
+
+class VaultPluginException(Exception):
+    def __init__(self, message):
+        super(VaultPluginException, self).__init__('VaultPlugin: ', message)
 
 
 class Main:
@@ -24,11 +28,12 @@ class Main:
     def _init_db(self):
         if self._db.first_load():
             return
-        flow_timestamp, boris_timestamp = self._vault.get_flow_and_boris_timestamps()
-        if not flow_timestamp or not boris_timestamp:
-            return
-        godnota_list = self._vault.get_godnota()
-        if not godnota_list:
+        try:
+            flow_timestamp, boris_timestamp = self._vault.get_flow_and_boris_timestamps()
+            godnota_list = self._vault.get_godnota()
+        except (VaultApiException, VaultPluginException) as e:
+            log.log(str(e))
+            RUNNING_FLAG.value = False
             return
         self._db.set_timestamp('boris', boris_timestamp)
         self._db.set_timestamp('flow', flow_timestamp)
@@ -226,39 +231,33 @@ class Vault:
         :param kwargs: именованные аргументы для этой функции
         :return: результат выполнения функции
         """
-        response = None
+        successfully = False
         try_counter = 5
-        while response is None and try_counter:
-            response = what_to_do(*args, **kwargs)
-            try_counter -= 1
-        if response is None:
-            RUNNING_FLAG.value = False
-            log.log('vault_plugin: ошибка при попытке сделать {} 5 раз'.format(what_to_do.__name__))
-            return
+        response = None
+        while try_counter:
+            try:
+                response = what_to_do(*args, **kwargs)
+                successfully = True
+            except VaultApiException as e:
+                try_counter -= 1
+        if not successfully:
+            raise VaultPluginException('Ошибка при попытке сделать 5 раз {}'.format(what_to_do.__name__))
         return response
 
     def get_flow_and_boris_timestamps(self) -> Tuple[str, str]:
         stats = self._do_it_5_times(self._api.get_stats)
-        if stats is None:
-            return '', ''
         return stats.timestamps_flow, stats.timestamps_boris
 
     def get_godnota(self) -> Dict[str, List[str]]:
         godnota = self._do_it_5_times(self._api.get_godnota)
-        if godnota is None:
-            return {}
         return {str(godnota[title]): [title] for title in godnota}
 
     def get_last_comment_timestamp(self, node_id) -> Optional[str]:
         comment_tuple = self._do_it_5_times(self.get_comments, node_id, 1)
-        if comment_tuple is None:
-            return
         return comment_tuple[1]
 
     def get_comments(self, node_id, number=10) -> Optional[Tuple[List[Tuple[str, str, List[str], bool]], str]]:
         comments_obj = self._api.get_comments(node_id, number)
-        if comments_obj is None:
-            return
         current_timestamp = comments_obj.comments[0].created_at
         comment_objects_list = comments_obj.comments
         return [comment for comment in self._build_comment_list_item(comment_objects_list)], current_timestamp
