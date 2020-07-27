@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import Dict, Union, Optional
 from .types import Stats, Comments, Diff, User, Node, Tag
 from utils import log
 import requests
@@ -53,7 +53,7 @@ class Api:
         if response:
             return response.heroes
 
-    def get_comments(self, node, take, skip=0):
+    def get_comments(self, node: Union[str, int], take: Union[str, int], skip=0) -> Optional[Comments]:
         params = {'take': take,
                   'skip': skip}
         try:

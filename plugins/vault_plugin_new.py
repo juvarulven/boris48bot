@@ -1,7 +1,8 @@
-from typing import List, Dict, Union, Optional, Callable, Any
+from typing import List, Dict, Tuple, Union, Optional, Callable, Any
 from database import Database
 from global_variables import TELEGRAM_BOT, RUNNING_FLAG
 from vault_api import Api
+from vault_api.types import Comment
 from config import VAULT_TEST
 from utils import log
 from utils.string_functions import de_markdown
@@ -12,6 +13,7 @@ class Main:
     """
     Главный класс плагина
     """
+
     def __init__(self, testing):
         self._db = DB()
         self._vault = Vault(testing)
@@ -25,9 +27,11 @@ class Main:
         flow_timestamp, boris_timestamp = self._vault.get_flow_and_boris_timestamps()
         if not flow_timestamp or not boris_timestamp:
             return
-        self._db.set_timestamp('flow', flow_timestamp)
+        godnota_list = self._vault.get_godnota()
+        if not godnota_list:
+            return
         self._db.set_timestamp('boris', boris_timestamp)
-
+        self._db.set_timestamp('flow', flow_timestamp)
 
     def sub(self):
         pass
@@ -43,6 +47,7 @@ class DB:
     """
     Класс для взаимодействия с БД
     """
+
     def __init__(self):
         self._db = Database('vault_plugin_new')
         self._flow_timestamp = None
@@ -74,15 +79,15 @@ class DB:
 
     def _update_db(self, target):
         if target == 'flow':
-            temp_document = { 'timestamp': self._flow_timestamp,
-                              'subscribers': self._flow_subscribers.copy() }
+            temp_document = {'timestamp': self._flow_timestamp,
+                             'subscribers': self._flow_subscribers.copy()}
         elif target == 'boris':
-            temp_document = { 'timestamp': self._boris_timestamp,
-                              'subscribers': self._boris_subscribers.copy() }
+            temp_document = {'timestamp': self._boris_timestamp,
+                             'subscribers': self._boris_subscribers.copy()}
         else:
-            temp_document = { 'title':       self._comments[target]['title'],
-                              'timestamp':   self._comments[target]['timestamp'],
-                              'subscribers': self._comments[target]['subscribers'].copy() }
+            temp_document = {'title': self._comments[target]['title'],
+                             'timestamp': self._comments[target]['timestamp'],
+                             'subscribers': self._comments[target]['subscribers'].copy()}
         self._db.update_document(target, fields_with_content=temp_document)
         self._db.save_and_update()
 
@@ -132,7 +137,6 @@ class DB:
             if target in self._comments:
                 return self._comments[target]['subscribers'].copy()
             return []
-
 
     def add_subscriber(self, target: str, telegram_id: int) -> bool:
         """
@@ -209,6 +213,7 @@ class Vault:
     """
     Класс для общения с Убежищем
     """
+
     def __init__(self, testing):
         self._api = Api(testing)
 
@@ -232,24 +237,53 @@ class Vault:
             return
         return response
 
-    def get_flow_and_boris_timestamps(self):
+    def get_flow_and_boris_timestamps(self) -> Tuple[str, str]:
         stats = self._do_it_5_times(self._api.get_stats)
         if stats is None:
             return '', ''
         return stats.timestamps_flow, stats.timestamps_boris
 
-    def get_godnota(self):
+    def get_godnota(self) -> Dict[str, List[str]]:
         godnota = self._do_it_5_times(self._api.get_godnota)
         if godnota is None:
+            return {}
+        return {str(godnota[title]): [title] for title in godnota}
+
+    def get_last_comment_timestamp(self, node_id) -> Optional[str]:
+        comment_tuple = self._do_it_5_times(self.get_comments, node_id, 1)
+        if comment_tuple is None:
             return
-        else:
-            return [(str(godnota[title]), title) for title in godnota]
+        return comment_tuple[1]
+
+    def get_comments(self, node_id, number=10):
+        comments_obj = self._api.get_comments(node_id, number)
+        if comments_obj is None:
+            return
+        current_timestamp = comments_obj.comments[0].created_at
+        comment_objects_list = comments_obj.comments
+        return [comments for comments in self._build_comment_list_item(comment_objects_list)], current_timestamp
+
+    def _build_comment_list_item(self, comments_list: List[Comment]) -> Tuple[str, str, List[str], bool]:
+        while comments_list:
+            comment = comments_list.pop()
+            username = comment.user.username
+            user_url = self._generate_user_url(username)
+            with_file = bool(comment.files)
+            comment_texts_list = [comment.text]
+            while comments_list and username == comments_list[-1].user.username:
+                comment_texts_list.append(comments_list.pop)
+            yield username, user_url, comment_texts_list, with_file
+
+    def _generate_user_url(self, username: str) -> str:
+        return self._api.url + '~' + username
+
 
 
 class Telegram:
     """
     Класс для взаимодействия с телеграммом
     """
+
     def __init__(self):
         self._bot = TELEGRAM_BOT.value
 
@@ -321,7 +355,7 @@ class Telegram:
         return template.format(de_markdown(username), user_url, url)
 
     @staticmethod
-    def _generate_boris_message(username, user_url, url, comments: List[str], with_files = False) -> str:
+    def _generate_boris_message(username, user_url, url, comments: List[str], with_files=False) -> str:
         template = '_Вот что_ [~{}]({}) _пишет_ [Борису]({})_:_\n\n{}'
         separator = '\n\n_и продолжает:_\n\n'
         with_f = '\n\n_да вдобавок прикрепляет какие-то прикрепления!_'
@@ -336,7 +370,6 @@ class Telegram:
     def _generate_godnota_message(title, url) -> str:
         template = '_В коллекции_ [{}]({}) _появилось что-то новенькое_'
         return template.format(de_markdown(title), url)
-
 
 
 vault = Main(VAULT_TEST)
