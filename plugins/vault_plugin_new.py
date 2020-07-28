@@ -1,4 +1,4 @@
-from typing import List, Dict, Tuple, Union, Optional, Callable, Iterator, Any
+from typing import List, Dict, Tuple, Union, Optional, Callable, Iterator, Any, NamedTuple
 from database import Database
 from global_variables import TELEGRAM_BOT, RUNNING_FLAG
 from vault_api import Api
@@ -48,6 +48,16 @@ class Main:
         pass
 
 
+class DBDocument(NamedTuple):
+    """
+    Поле базы данных
+    """
+    node: str
+    title: str
+    timestamp: str
+    subscribers: List[int]
+
+
 class DB:
     """
     Класс для взаимодействия с БД
@@ -55,12 +65,7 @@ class DB:
 
     def __init__(self):
         self._db = Database('vault_plugin_new')
-        self._flow_timestamp = None
-        self._flow_subscribers = []
-        self._boris_timestamp = None
-        self._boris_subscribers = []
-        self._comments: Dict[str, Dict[str, Union[str, List[int]]]] = {}
-        # { 'node_id': {'title': 'название', 'timestamp': 'таймстамп', 'subscribers': [телеграм_id...]}... }
+        self._documents: List[DBDocument] = []
 
     def first_load(self) -> bool:
         """
@@ -72,29 +77,24 @@ class DB:
             return False
         for document_name in document_names:
             document = self._db.get_document(document_name)
-            if document_name == "flow":
-                self._flow_timestamp = document["timestamp"]
-                self._flow_subscribers = document["subscribers"]
-            elif document_name == "boris":
-                self._boris_timestamp = document["timestamp"]
-                self._boris_subscribers = document["subscribers"]
-            else:
-                self._comments[document_name] = document
+            self._documents.append(DBDocument(document_name,
+                                              document['title'],
+                                              document['timestamp'],
+                                              document['subscribers']))
         return True
 
     def _update_db(self, target):
-        if target == 'flow':
-            temp_document = {'timestamp': self._flow_timestamp,
-                             'subscribers': self._flow_subscribers.copy()}
-        elif target == 'boris':
-            temp_document = {'timestamp': self._boris_timestamp,
-                             'subscribers': self._boris_subscribers.copy()}
-        else:
-            temp_document = {'title': self._comments[target]['title'],
-                             'timestamp': self._comments[target]['timestamp'],
-                             'subscribers': self._comments[target]['subscribers'].copy()}
-        self._db.update_document(target, fields_with_content=temp_document)
-        self._db.save_and_update()
+        found = False
+        for document in self._documents:
+            if document.node == target:
+                found = True
+                break
+        if found:
+            temp_document = {'title': document.title,
+                             'timestamp': document.timestamp,
+                             'subscribers': document.subscribers}
+            self._db.update_document(target, fields_with_content=temp_document)
+            self._db.save_and_update()
 
     def get_timestamp(self, target: str) -> Optional[str]:
         """
@@ -248,15 +248,15 @@ class Vault:
         stats = self._do_it_5_times(self._api.get_stats)
         return stats.timestamps_flow, stats.timestamps_boris
 
-    def get_godnota(self) -> Dict[str, List[str]]:
+    def get_godnota(self) -> Dict[str, str]:
         godnota = self._do_it_5_times(self._api.get_godnota)
-        return {str(godnota[title]): [title] for title in godnota}
+        return {str(godnota[title]): title for title in godnota}
 
-    def get_last_comment_timestamp(self, node_id) -> Optional[str]:
+    def get_last_comment_timestamp(self, node_id) -> str:
         comment_tuple = self._do_it_5_times(self.get_comments, node_id, 1)
         return comment_tuple[1]
 
-    def get_comments(self, node_id, number=10) -> Optional[Tuple[List[Tuple[str, str, List[str], bool]], str]]:
+    def get_comments(self, node_id, number=10) -> Tuple[List[Tuple[str, str, List[str], bool]], str]:
         comments_obj = self._api.get_comments(node_id, number)
         current_timestamp = comments_obj.comments[0].created_at
         comment_objects_list = comments_obj.comments

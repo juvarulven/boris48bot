@@ -1,6 +1,5 @@
-from typing import Dict, List, Union, Optional
+from typing import Dict, List, Union
 from .types import Stats, DiffPost, Hero, Comments, Diff, User, Node, Tag, VaultApiException
-from utils import log
 import requests
 
 TEST_URL = 'https://staging.vault48.org:3334/'
@@ -30,7 +29,7 @@ class Api:
         """
         return Stats(get_json(self._stats_url))
 
-    def get_diff(self, start="", end="", with_heroes=False, with_updated=False,
+    def get_diff(self, start='', end='', with_heroes=False, with_updated=False,
                  with_recent=False, with_valid=False) -> Diff:
         """
         Получает /node/diff Убежища. Если start и end пусты -- поля before и after будут пусты
