@@ -1,4 +1,4 @@
-from typing import List, Dict, Tuple, Union, Optional, Callable, Iterator, Any, NamedTuple
+from typing import List, Dict, Tuple, Union, Optional, Callable, Iterator, Any, NamedTuple, Literal
 from database import Database
 from global_variables import TELEGRAM_BOT, RUNNING_FLAG
 from vault_api import Api
@@ -191,6 +191,7 @@ class Vault:
     """
     Класс для общения с Убежищем.
     """
+
     def __init__(self, testing):
         self._api = Api(testing)
 
@@ -291,7 +292,10 @@ class Telegram:
     def __init__(self):
         self._bot = TELEGRAM_BOT.value
 
-    def send_message(self, message_type: str, subscribers: List[Union[str, int]], *args, **kwargs) -> None:
+    def send_message(self, message_type: Literal['image', 'text', 'audio', 'video', 'other', 'boris', 'godnota'],
+                     subscribers: List[Union[str, int]],
+                     *args,
+                     **kwargs) -> None:
         """
         Отправляет сообщение в телеграмм.
 
