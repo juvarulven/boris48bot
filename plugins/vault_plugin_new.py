@@ -203,6 +203,9 @@ class VaultCommentsBlock(NamedTuple):
 
 
 class VaultImagePost(NamedTuple):
+    """
+    Пост-изображение Убежища
+    """
     username: str
     user_url: str
     title: str
@@ -212,6 +215,9 @@ class VaultImagePost(NamedTuple):
 
 
 class VaultTextPost(NamedTuple):
+    """
+    Текстовый пост убежища
+    """
     username: str
     user_url: str
     title: str
@@ -220,20 +226,32 @@ class VaultTextPost(NamedTuple):
 
 
 class VaultOtherPost(NamedTuple):
+    """
+    Пост Убежища типа 'other'
+    """
     username: str
     user_url: str
     post_url: str
 
 
 class VaultAudioPost(VaultOtherPost):
+    """
+    Аудиопост Убежища
+    """
     pass
 
 
 class VaultVideoPost(VaultOtherPost):
+    """
+    Видеопост Убежища
+    """
     pass
 
 
 class VaultGodnotaPost(NamedTuple):
+    """
+    Пост годноты Убежища
+    """
     title: str
     post_url: str
 
