@@ -1,4 +1,4 @@
-from typing import List, Dict, Tuple, Union, Optional, Callable, Iterator, Any, NamedTuple, Literal
+from typing import List, Dict, Tuple, Union, Optional, Callable, Iterator, Any, NamedTuple
 from database import Database
 from global_variables import TELEGRAM_BOT, RUNNING_FLAG
 from vault_api import Api
@@ -191,7 +191,7 @@ class DB:
         return [document.title for document in self._documents.values()]
 
 
-class CommentsBlock(NamedTuple):
+class VaultCommentsBlock(NamedTuple):
     """
     Блок комментариев пользователя Убежища
     """
@@ -199,6 +199,7 @@ class CommentsBlock(NamedTuple):
     user_url: str
     user_comments: List[str]
     with_file: bool
+    post_url: str
 
 
 class VaultImagePost(NamedTuple):
@@ -218,8 +219,23 @@ class VaultTextPost(NamedTuple):
     description: str
 
 
-class VaultAudio(NamedTuple):
+class VaultOtherPost(NamedTuple):
+    username: str
+    user_url: str
+    post_url: str
+
+
+class VaultAudioPost(VaultOtherPost):
     pass
+
+
+class VaultVideoPost(VaultOtherPost):
+    pass
+
+
+class VaultGodnotaPost(NamedTuple):
+    title: str
+    post_url: str
 
 
 class Vault:
@@ -289,20 +305,21 @@ class Vault:
         comment_tuple = self._try_it_5_times(self.get_comments, node_id, 1)
         return comment_tuple[1]
 
-    def get_comments(self, node_id: str, number=10) -> Tuple[List[CommentsBlock], str]:
+    def get_comments(self, node_id: str, number=10) -> Tuple[List[VaultCommentsBlock], str]:
         """
         Возвращает кортеж из списка комментариев и таймстампа последнего комментария.
 
         :param node_id: id ноды
         :param number: количество комментариев для обработки
-        :return: список CommentsBlock, таймстамп последнего комментария
+        :return: список VaultCommentsBlock, таймстамп последнего комментария
         """
         comments_obj = self._api.get_comments(node_id, number)
+        post_url = self._api.post_url.format(node_id)
         last_timestamp = comments_obj.comments[0].created_at
         comment_objects_list = comments_obj.comments
-        return [comment for comment in self._build_comment_list_item(comment_objects_list)], last_timestamp
+        return [comment for comment in self._build_comment_list_item(comment_objects_list, post_url)], last_timestamp
 
-    def _build_comment_list_item(self, comments_list: List[Comment]) -> Iterator[CommentsBlock]:
+    def _build_comment_list_item(self, comments_list: List[Comment], post_url) -> Iterator[VaultCommentsBlock]:
         while comments_list:
             comment = comments_list.pop()
             username = comment.user.username
@@ -313,7 +330,7 @@ class Vault:
                 comment = comments_list.pop()
                 user_comments.append(comment.text)
                 with_file.append(bool(comment.files))
-            yield CommentsBlock(username, user_url, user_comments, any(with_file))
+            yield VaultCommentsBlock(username, user_url, user_comments, any(with_file), post_url)
 
     def _generate_user_url(self, username: str) -> str:
         return self._api.url + '~' + username
@@ -331,7 +348,7 @@ class Telegram:
         self.send_keyboard(message, 'На что хотите подписаться?', topics)
         self._bot.register_next_step_handler(message, handler)
 
-    def do_unsub(self, message, topics:List[str], handler: Callable[[Any], None]) -> None:
+    def do_unsub(self, message, topics: List[str], handler: Callable[[Any], None]) -> None:
         self.send_keyboard(message, 'На что хотите подписаться?', topics)
         self._bot.register_next_step_handler(message, handler)
 
@@ -341,42 +358,44 @@ class Telegram:
         markup.add(telegram_types.KeyboardButton(button) for button in buttons)
         self._bot.send_message(message.from_user.id, text, reply_markup=markup)
 
-    def destroy_keyboard(self, message, text: str) -> None:
+    def destroy_keyboard(self, message) -> None:
         markup = telegram_types.ReplyKeyboardRemove(selective=False)
         self._bot.send_message(message.from_user.id, 'Рад услужить!', reply_markup=markup)
 
-    def send_message(self, message_type: Literal['image', 'text', 'audio', 'video', 'other', 'boris', 'godnota'],
-                     subscribers: List[Union[str, int]],
-                     *args,
-                     **kwargs) -> None:
+    def send_message(self, post_obj: Union[VaultImagePost,
+                                           VaultTextPost,
+                                           VaultAudioPost,
+                                           VaultVideoPost,
+                                           VaultOtherPost,
+                                           VaultCommentsBlock,
+                                           VaultGodnotaPost],
+                     subscribers: List[Union[str, int]]) -> None:
         """
         Отправляет сообщение в телеграмм.
 
-        :param message_type: тип сообщения
+        :param post_obj: объект поста или блока комментариев для Бориса
         :param subscribers: подписчики
-        :param args: аргументы для функций шаблонов
-        :param kwargs: аргументы для функций шаблонов. Для типа 'image' обязательно должен быть аргумент image_url=
         :return:
         """
-        if message_type == 'image' and 'image_url' in kwargs:
-            image_url = kwargs.pop('image_url')
-            message = self._generate_image_message(*args, **kwargs)
-            self._send_photo(subscribers, image_url, message)
+        obj_type = type(post_obj)
+        if obj_type == VaultImagePost:
+            message = self._generate_image_message(post_obj)
+            self._send_photo(subscribers, post_obj.image_url, message)
             return
-        elif message_type == 'text':
-            message = self._generate_text_message(*args, **kwargs)
-        elif message_type == 'audio':
-            message = self._generate_audio_message(*args, **kwargs)
-        elif message_type == 'video':
-            message = self._generate_video_message(*args, **kwargs)
-        elif message_type == 'other':
-            message = self._generate_other_message(*args, **kwargs)
-        elif message_type == 'boris':
-            message = self._generate_boris_message(*args, **kwargs)
-        elif message_type == 'godnota':
-            message = self._generate_godnota_message(*args, **kwargs)
+        elif obj_type == VaultTextPost:
+            message = self._generate_text_message(post_obj)
+        elif obj_type == VaultAudioPost:
+            message = self._generate_audio_message(post_obj)
+        elif obj_type == VaultVideoPost:
+            message = self._generate_video_message(post_obj)
+        elif obj_type == VaultOtherPost:
+            message = self._generate_other_message(post_obj)
+        elif obj_type == VaultCommentsBlock:
+            message = self._generate_boris_message(post_obj)
+        elif obj_type == VaultGodnotaPost:
+            message = self._generate_godnota_message(post_obj)
         else:
-            return
+            raise VaultPluginException('Попытка послать в Тлеграмм сообщение неизвестного типа')
         self._send_text(subscribers, message)
 
     def _send_text(self, subscribers: List[Union[str, int]], text: str) -> None:
@@ -411,111 +430,97 @@ class Telegram:
                 log.log(error_message)
 
     @staticmethod
-    def _generate_image_message(title: str, url: str, username: str, user_url: str, description: str = "") -> str:
+    def _generate_image_message(obj: VaultImagePost) -> str:
         """
         Генерирует текстовое описания для сообщения типа 'image'.
 
-        :param title: заголовок поста Убежища
-        :param url: ссылка на пост Убежища
-        :param username: ник запостившего
-        :param user_url: ссылка на запостившего
-        :param description: описание к посту Убежища
+        :param obj: объект поста изображения
         :return: текст опистания
         """
         template = '\n[{}]({})\n_Вот чем в Течении делится_ [~{}]({}) _(и, возможно, это еще не все)_'
         with_description = '\n_да вдобавок пишет:_\n\n{}'
-        message = template.format(de_markdown(title), url, de_markdown(username), user_url)
+        message = template.format(de_markdown(obj.title), obj.post_url, de_markdown(obj.username), obj.user_url)
+        description = obj.description
         if description:
             message += with_description.format(de_markdown(description))
         return message
 
     @staticmethod
-    def _generate_text_message(username: str, user_url: str, title: str, url: str, description: str) -> str:
+    def _generate_text_message(obj: VaultTextPost) -> str:
         """
         Генерирует текст для сообщения типа 'text'.
 
-        :param username: ник запостившего
-        :param user_url: ссылка на запостившего
-        :param title: заголовок поста Убежища
-        :param url: ссылка на пост Убежища
-        :param description: тело поста Убежища
+        :param obj: объект текстового поста
         :return: текст сообщения
         """
         template = '[~{}]({}) _делится мыслями в Течении:_\n\n[{}]({})\n{}'
-        return template.format(de_markdown(username), user_url, de_markdown(title), url, de_markdown(description))
+        return template.format(de_markdown(obj.username),
+                               obj.user_url,
+                               de_markdown(obj.title),
+                               obj.post_url,
+                               de_markdown(obj.description))
 
     @staticmethod
-    def _generate_audio_message(username: str, user_url: str, url: str) -> str:
+    def _generate_audio_message(obj: VaultAudioPost) -> str:
         """
         Генерирует текст для сообщения типа 'audio'.
 
-        :param username: ник запостившего
-        :param user_url: ссылка на запостившего
-        :param url: ссылка на пост Убежища
+        :param obj: объект аудиопоста
         :return: текст сообщения
         """
         template = '[~{}]({}) _делится_ [аудиозаписью]({}) _в Течении (а может и не одной)._'
-        return template.format(de_markdown(username), user_url, url)
+        return template.format(de_markdown(obj.username), obj.user_url, obj.post_url)
 
     @staticmethod
-    def _generate_video_message(username: str, user_url: str, url: str) -> str:
+    def _generate_video_message(obj: VaultVideoPost) -> str:
         """
         Генерирует текст для сообщения типа 'video'.
 
-        :param username: ник запостившего
-        :param user_url: ссылка на запостившего
-        :param url: ссылка на пост Убежища
+        :param obj: объект видеопоста
         :return: текст сообщения
         """
         template = '[~{}]({}) _делится_ [видеозаписью]({}) _в Течении._'
-        return template.format(de_markdown(username), user_url, url)
+        return template.format(de_markdown(obj.username), obj.user_url, obj.post_url)
 
     @staticmethod
-    def _generate_other_message(username: str, user_url: str, url: str) -> str:
+    def _generate_other_message(obj: VaultOtherPost) -> str:
         """
         Генерирует текст для сообщения типа 'other'.
 
-        :param username: ник запостившего
-        :param user_url: ссылка на запостившего
-        :param url: ссылка на пост убежища
+        :param obj: объект поста типа 'other'
         :return: текст сообщения
         """
         template = '[~{}]({}) _делится чем-то_ [неординарным]({}) _в Течении._'
-        return template.format(de_markdown(username), user_url, url)
+        return template.format(de_markdown(obj.username), obj.user_url, obj.post_url)
 
     @staticmethod
-    def _generate_boris_message(username, user_url, url, comments: List[str], with_files=False) -> str:
+    def _generate_boris_message(obj: VaultCommentsBlock) -> str:
         """
         Генерирует текст для сообщения типа 'boris'.
 
-        :param username: ник комментирующего
-        :param user_url: ссылка на комментирующего
-        :param url: ссылка на Бориса
-        :param comments: список комментариев
-        :param with_files: прикреплен ли файл
+        :param obj: объект блока комментариев для Бориса
         :return: текст сообщения
         """
         template = '_Вот что_ [~{}]({}) _пишет_ [Борису]({})_:_\n\n{}'
         separator = '\n\n_и продолжает:_\n\n'
         with_f = '\n\n_да вдобавок прикрепляет какие-то прикрепления!_'
-        comments = list(map(de_markdown, comments))
+        comments = list(map(de_markdown, obj.user_comments))
         comments = separator.join(comments)
-        message = template.format(de_markdown(username), user_url, url, comments)
-        if with_files:
+        message = template.format(de_markdown(obj.username), obj.user_url, obj.post_url, comments)
+        if obj.with_file:
             message += with_f
         return message
 
     @staticmethod
-    def _generate_godnota_message(title, url) -> str:
+    def _generate_godnota_message(obj: VaultGodnotaPost) -> str:
         """
         Генерирует текст для сообщения типа 'godnota':
 
-        :param title: заголовок поста с годнотой
-        :param url: ссылка на пост Убежища
+        :param obj: объект поста убежища
         :return: текст сообщения
         """
         template = '_В коллекции_ [{}]({}) _появилось что-то новенькое_'
-        return template.format(de_markdown(title), url)
+        return template.format(de_markdown(obj.title), obj.post_url)
 
 
 vault = Main(VAULT_TEST)
