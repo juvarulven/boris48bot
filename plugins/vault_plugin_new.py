@@ -3,6 +3,7 @@ from database import Database
 from global_variables import TELEGRAM_BOT, RUNNING_FLAG
 from vault_api import Api
 from vault_api.types import Comment, VaultApiException
+from telebot import types as telegram_types
 from config import VAULT_TEST
 from utils import log
 from utils.string_functions import de_markdown
@@ -29,7 +30,7 @@ class Main:
         if self._db.first_load():
             return
         try:
-            flow_timestamp, boris_timestamp = self._vault.get_flow_and_boris_timestamps()
+            flow_timestamp, boris_timestamp = self._vault.get_flow_and_boris_timestamps(responsibly=True)
             godnota_list = [(node_id, title, self._vault.get_last_comment_timestamp(node_id))
                             for node_id, title in self._vault.get_godnota()]  # [(node_id, title, timestamp)...]
         except Exception as e:
@@ -41,10 +42,16 @@ class Main:
         for node_id, title, timestamp in godnota_list:
             self._db.add_document(node_id, title, timestamp)
 
-    def sub(self):
+    def sub(self, message):
+        self._tg.do_sub(message, self._db.get_topics_titles(), self.sub_next_step)
+
+    def sub_next_step(self, message):
         pass
 
     def unsub(self):
+        pass
+
+    def unsub_next_step(self, message):
         pass
 
     def scheduled(self):
@@ -176,6 +183,13 @@ class DB:
                 node_ids_and_titles.append((document_name, document.title))
         return node_ids_and_titles
 
+    def get_topics_titles(self) -> List[str]:
+        """
+        Все поля title из базы
+        :return: Список заголовков
+        """
+        return [document.title for document in self._documents.values()]
+
 
 class CommentsBlock(NamedTuple):
     """
@@ -185,6 +199,27 @@ class CommentsBlock(NamedTuple):
     user_url: str
     user_comments: List[str]
     with_file: bool
+
+
+class VaultImagePost(NamedTuple):
+    username: str
+    user_url: str
+    title: str
+    post_url: str
+    image_url: str
+    description: str
+
+
+class VaultTextPost(NamedTuple):
+    username: str
+    user_url: str
+    title: str
+    post_url: str
+    description: str
+
+
+class VaultAudio(NamedTuple):
+    pass
 
 
 class Vault:
@@ -291,6 +326,24 @@ class Telegram:
 
     def __init__(self):
         self._bot = TELEGRAM_BOT.value
+
+    def do_sub(self, message, topics: List[str], handler: Callable[[Any], None]) -> None:
+        self.send_keyboard(message, 'На что хотите подписаться?', topics)
+        self._bot.register_next_step_handler(message, handler)
+
+    def do_unsub(self, message, topics:List[str], handler: Callable[[Any], None]) -> None:
+        self.send_keyboard(message, 'На что хотите подписаться?', topics)
+        self._bot.register_next_step_handler(message, handler)
+
+    def send_keyboard(self, message, text: str, buttons: List[str]) -> None:
+        buttons.append('Закончить')
+        markup = telegram_types.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
+        markup.add(telegram_types.KeyboardButton(button) for button in buttons)
+        self._bot.send_message(message.from_user.id, text, reply_markup=markup)
+
+    def destroy_keyboard(self, message, text: str) -> None:
+        markup = telegram_types.ReplyKeyboardRemove(selective=False)
+        self._bot.send_message(message.from_user.id, 'Рад услужить!', reply_markup=markup)
 
     def send_message(self, message_type: Literal['image', 'text', 'audio', 'video', 'other', 'boris', 'godnota'],
                      subscribers: List[Union[str, int]],
