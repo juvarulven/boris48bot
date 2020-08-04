@@ -89,10 +89,10 @@ class User(BasicUser):
 class BasicPost:
     def __init__(self, dictionary: dict):
         self.id: int = dictionary['id']
-        self.title: int = dictionary['title']
-        self.type: int = dictionary['type']
-        self.created_at: int = dictionary['created_at']
-        self.commented_at: int = dictionary['commented_at']
+        self.title: str = dictionary['title']
+        self.type: str = dictionary['type']
+        self.created_at: str = dictionary['created_at']
+        self.commented_at: str = dictionary['commented_at']
         self.thumbnail: str = dictionary['thumbnail'].replace('REMOTE_CURRENT://', _URL) if dictionary['thumbnail'] else None
         self.description: str = dictionary['description']
 
