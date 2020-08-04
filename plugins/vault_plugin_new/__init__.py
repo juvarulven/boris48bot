@@ -35,16 +35,44 @@ class Main:
             self._db.add_document(node_id, title, timestamp)
 
     def sub(self, message):
-        self._tg.do_sub(message, self._db.get_topics_titles(), self.sub_next_step)
+        topics = self._db.get_topics_titles()
+        topics.append('Закончить')
+        self._tg.do_sub(message, topics, self.sub_next_step)
 
     def sub_next_step(self, message):
-        pass
+        telegram_id = message.from_user.id
+        topic = message.text
+        if topic == 'Закончить':
+            self._tg.destroy_keyboard(message)
+            return
+        document_name = self._db.get_document_name_by_title(topic)
+        if document_name is None:
+            self._tg.send_text([telegram_id], 'Не могу этого сделать!')
+        elif not self._db.add_subscriber(document_name, telegram_id):
+            self._tg.send_text([telegram_id], 'Вы уже подписаны на топик ' + topic)
+        else:
+            self._tg.send_text([telegram_id], 'Теперь вы подписаны на топик ' + topic)
+        self._tg.next_step(message, self.sub_next_step)
 
-    def unsub(self):
-        pass
+    def unsub(self, message):
+        topics = self._db.get_topics_titles()
+        topics.append('Закончить')
+        self._tg.do_unsub(message, topics, self.unsub_next_step)
 
     def unsub_next_step(self, message):
-        pass
+        telegram_id = message.from_user.id
+        topic = message.text
+        if topic == 'Закончить':
+            self._tg.destroy_keyboard(message)
+            return
+        document_name = self._db.get_document_name_by_title(topic)
+        if document_name is None:
+            self._tg.send_text([telegram_id], 'Не могу этого сделать!')
+        elif not self._db.remove_subscriber(document_name, telegram_id):
+            self._tg.send_text([telegram_id], 'Вы не были подписаны на топик ' + topic)
+        else:
+            self._tg.send_text([telegram_id], 'Вы больше не будете получать обновления топика ' + topic)
+        self._tg.next_step(message, self.unsub_next_step)
 
     def scheduled(self):
         pass

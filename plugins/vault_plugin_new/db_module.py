@@ -125,3 +125,8 @@ class DB:
         :return: Список заголовков
         """
         return [document.title for document in self._documents.values()]
+
+    def get_document_name_by_title(self, title: str) -> Optional[str]:
+        for document_name, document in self._documents.items():
+            if document.title == title:
+                return document_name

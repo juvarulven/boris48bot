@@ -17,14 +17,16 @@ class Telegram:
 
     def do_sub(self, message, topics: List[str], handler: Callable[[Any], None]) -> None:
         self.send_keyboard(message, 'На что хотите подписаться?', topics)
-        self._bot.register_next_step_handler(message, handler)
+        self.next_step(message, handler)
 
     def do_unsub(self, message, topics: List[str], handler: Callable[[Any], None]) -> None:
-        self.send_keyboard(message, 'На что хотите подписаться?', topics)
+        self.send_keyboard(message, 'От чего хотите отписаться?', topics)
+        self.next_step(message, handler)
+
+    def next_step(self, message, handler: Callable[[Any], None]) -> None:
         self._bot.register_next_step_handler(message, handler)
 
     def send_keyboard(self, message, text: str, buttons: List[str]) -> None:
-        buttons.append('Закончить')
         markup = telegram_types.ReplyKeyboardMarkup(resize_keyboard=True, selective=True)
         markup.add(telegram_types.KeyboardButton(button) for button in buttons)
         self._bot.send_message(message.from_user.id, text, reply_markup=markup)
@@ -67,9 +69,9 @@ class Telegram:
             message = self._generate_godnota_message(post_obj)
         else:
             raise VaultPluginException('Попытка послать в Тлеграмм сообщение неизвестного типа')
-        self._send_text(subscribers, message)
+        self.send_text(subscribers, message)
 
-    def _send_text(self, subscribers: List[Union[str, int]], text: str) -> None:
+    def send_text(self, subscribers: List[Union[str, int]], text: str) -> None:
         """
         Отправляет текстовое сообщение подписчикам в телеграмм.
 

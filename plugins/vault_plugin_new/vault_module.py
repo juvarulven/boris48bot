@@ -1,7 +1,8 @@
 from vault_api import Api
 from vault_api.types import VaultApiException, Comment
-from .plugin_types import VaultPluginException, VaultCommentsBlock
-from typing import Callable, Any, Tuple, Iterator, List
+from .plugin_types import VaultPluginException, VaultCommentsBlock, VaultImagePost, VaultTextPost, VaultAudioPost
+from .plugin_types import VaultVideoPost, VaultOtherPost, VaultGodnotaPost
+from typing import Callable, Any, Tuple, Iterator, List, Union
 
 
 class Vault:
@@ -100,3 +101,15 @@ class Vault:
 
     def _generate_user_url(self, username: str) -> str:
         return self._api.url + '~' + username
+
+    def check_updates(self, flow_timestamp, boris_timestamp, godnota_nodes: List[str]) -> List[Union[VaultCommentsBlock,
+                                                                                                     VaultImagePost,
+                                                                                                     VaultTextPost,
+                                                                                                     VaultAudioPost,
+                                                                                                     VaultVideoPost,
+                                                                                                     VaultOtherPost,
+                                                                                                     VaultGodnotaPost]]:
+        updates = []
+        flow_current_timestamp, boris_current_timestamp = self.get_flow_and_boris_timestamps()
+        if flow_timestamp < flow_current_timestamp:
+        return updates
