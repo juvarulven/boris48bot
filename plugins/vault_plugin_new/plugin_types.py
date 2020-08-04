@@ -1,4 +1,4 @@
-from typing import NamedTuple, List
+from typing import NamedTuple, List, Union
 
 
 class VaultPluginException(Exception):
@@ -24,6 +24,7 @@ class VaultCommentsBlock(NamedTuple):
     user_comments: List[str]
     with_file: bool
     post_url: str
+    timestamp: str
 
 
 class VaultImagePost(NamedTuple):
@@ -58,18 +59,22 @@ class VaultOtherPost(NamedTuple):
     post_url: str
 
 
-class VaultAudioPost(VaultOtherPost):
+class VaultAudioPost(NamedTuple):
     """
     Аудиопост Убежища
     """
-    pass
+    username: str
+    user_url: str
+    post_url: str
 
 
-class VaultVideoPost(VaultOtherPost):
+class VaultVideoPost(NamedTuple):
     """
     Видеопост Убежища
     """
-    pass
+    username: str
+    user_url: str
+    post_url: str
 
 
 class VaultGodnotaPost(NamedTuple):
@@ -78,3 +83,15 @@ class VaultGodnotaPost(NamedTuple):
     """
     title: str
     post_url: str
+    timestamp: str
+
+
+class VaultUpdates(NamedTuple):
+    """
+    Списки обновлений и таймстампы Убежища
+    """
+    flow_updates: List[Union[VaultTextPost, VaultImagePost, VaultAudioPost, VaultVideoPost, VaultOtherPost]]
+    flow_timestamp: str
+    boris_updates: List[VaultCommentsBlock]
+    boris_timestamp: str
+    godnota_updates: List[VaultGodnotaPost]

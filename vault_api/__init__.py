@@ -40,7 +40,7 @@ class Api:
         :param with_updated:
         :param with_recent:
         :param with_valid:
-        :return: Diff объект или None в случае провала
+        :return: Diff объект
         """
         params = {'start': start,
                   'end': end,
