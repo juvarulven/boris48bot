@@ -8,7 +8,6 @@ from utils import log
 from utils.string_functions import de_markdown
 from global_variables import RUNNING_FLAG, TELEGRAM_BOT
 from config import VAULT_TEST
-import requests
 
 
 class Vault:
