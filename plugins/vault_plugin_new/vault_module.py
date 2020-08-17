@@ -82,7 +82,6 @@ class Vault:
         """
         comments_obj = self._api.get_comments(node_id, number)
         post_url = self._api.post_url.format(node_id)
-        last_timestamp = comments_obj.comments[0].created_at
         comment_objects_list = comments_obj.comments
         return [comment for comment in self._build_comment_list_item(comment_objects_list, post_url)]
 
@@ -104,27 +103,67 @@ class Vault:
         return self._api.url + '~' + username
 
     def check_updates(self, flow_timestamp, boris_timestamp, godnota_nodes: Dict[str, str]) -> VaultUpdates:
+        """
+        Проверка обновлений.
+
+        :param flow_timestamp: таймстамп Течения
+        :param boris_timestamp: таймстамп Бориса
+        :param godnota_nodes: словарь вида {id ноды: таймстамп...}
+        :return: объект обновлений
+        """
         flow_current_timestamp, boris_current_timestamp = self.get_flow_and_boris_timestamps()
         diff = self._api.get_diff(flow_timestamp, flow_timestamp, with_recent=True)
-        recent = diff.recent
-        flow_posts = []
-        if flow_timestamp < flow_current_timestamp:
-            new_posts = diff.before
-            while new_posts:
-                flow_posts.append(self._make_flow_post_object(new_posts.pop()))
-        boris_posts = []
+        flow_posts = self._get_flow_updates(diff.before)
+        boris_comments = self._get_boris_updates(boris_timestamp, boris_current_timestamp)
+        godnota_posts = self._get_godnota_updates(godnota_nodes, diff.recent)
+        return VaultUpdates(flow_posts, flow_current_timestamp, boris_comments, boris_current_timestamp, godnota_posts)
+
+    def _get_flow_updates(self, diff_before: List[DiffPost]) -> List[Union[VaultTextPost, VaultImagePost,
+                                                                           VaultAudioPost, VaultVideoPost,
+                                                                           VaultOtherPost]]:
+        """
+        Проверка обновлений Течения.
+
+        :param diff_before: before из diff Убежища
+        :return: список объектов постов
+        """
+        flow_post_objects = []
+        while diff_before:
+            flow_post_objects.append(self._make_flow_post_object(diff_before.pop()))
+        return flow_post_objects
+
+    def _get_boris_updates(self, boris_timestamp: str, boris_current_timestamp: str) -> List[VaultCommentsBlock]:
+        """
+        Проверка обновлений Бориса.
+
+        :param boris_timestamp: последний известный таймстамп последнего комментария Бориса
+        :param boris_current_timestamp: таймстамп последнего комментария Бориса, полученный только что
+        :return: список объектов комментариев
+        """
+        boris_comment_objects = []
         if boris_timestamp < boris_current_timestamp:
             new_comments = self.get_comments(self._api.boris_node)
             new_comments = [comment for comment in new_comments if comment.timestamp > boris_timestamp]
             while new_comments:
-                boris_posts.append(new_comments.pop())
-        godnota_posts = []
-        for recent_node in recent:
+                boris_comment_objects.append(new_comments.pop())
+        return boris_comment_objects
+
+    def _get_godnota_updates(self, godnota_nodes: Dict[str, str], diff_recent) -> List[VaultGodnotaPost]:
+        """
+        Проверка обновлений Годноты.
+
+        :param godnota_nodes: словарь вида {id ноды: таймстамп...}
+        :param diff_recent: recent из diff Убежища
+        :return: список объектов Годноты
+        """
+        godnota_post_objects = []
+        for recent_node in diff_recent:
             node_id = str(recent_node.id)
             if node_id in godnota_nodes and godnota_nodes[node_id] < recent_node.commented_at:
-
-
-
+                godnota_post_objects.append(VaultGodnotaPost(recent_node.title,
+                                                             self._api.post_url.format(node_id),
+                                                             recent_node.created_at))
+        return godnota_post_objects
 
     def _make_flow_post_object(self, diff_post: DiffPost) -> Union[VaultTextPost, VaultImagePost, VaultAudioPost,
                                                                    VaultVideoPost, VaultOtherPost]:
