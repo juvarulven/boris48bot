@@ -95,9 +95,11 @@ class Telegram:
         :param text: текстовое опистание
         :return:
         """
+        file_id = ''
         for addressee in subscribers:
             try:
-                self._bot.send_photo(addressee, url, caption=text, parse_mode='Markdown')
+                res = self._bot.send_photo(addressee, file_id if file_id else url, caption=text, parse_mode='Markdown')
+                file_id = res.photo[-1].file_id
             except Exception as error:
                 error_message = 'vault_plugin: Ошибка при попытке отправить фото в телеграмм: ' + str(error)
                 log.log(error_message)
