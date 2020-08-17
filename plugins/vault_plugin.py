@@ -282,15 +282,12 @@ class Vault:
             message += '\n_да вдобавок пишет:_\n\n{}'.format(de_markdown(description))
         try:
             apihelper.CONNECT_TIMEOUT = 10
-            file_id = None
-            response = requests.get(thumbnail)
-            assert response.ok, 'не смог получить фото из убежища по ссылке ' + thumbnail
-            photo = response.content
+            file_id = ''
             for addressee in self._last_updates['flow']['subscribers']:
                 file_id = TELEGRAM_BOT.value.send_photo(addressee,
-                                                        photo if file_id is None else file_id,
+                                                        file_id if file_id else thumbnail,
                                                         caption=message,
-                                                        parse_mode='Markdown')['photo'][0]['file_id']
+                                                        parse_mode='Markdown').photo[-1].file_id
         except Exception as error:
             error_message = 'vault_plugin: Ошибка при попытке отправить фото в телеграмм: ' + str(error)
             log.log(error_message)
