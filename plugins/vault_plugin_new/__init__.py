@@ -75,7 +75,16 @@ class Main:
         self._tg.next_step(message, self.unsub_next_step)
 
     def scheduled(self):
-        pass
+        flow_timestamp = self._db.get_timestamp('flow')
+        boris_timestamp = self._db.get_timestamp('boris')
+        godnota = self._db.get_comments_nodes()
+        godnota_dict = {}
+        for node, _ in godnota:
+            godnota_dict[node] = self._db.get_timestamp(node)
+        updates = self._vault.check_updates(flow_timestamp, boris_timestamp, godnota_dict)
+        self._db.set_timestamp('flow', updates.flow_timestamp)
+        self._db.set_timestamp('boris', updates.boris_timestamp)
+        # TODO: доделать
 
 
 vault = Main(VAULT_TEST)
