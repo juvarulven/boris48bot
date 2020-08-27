@@ -6,15 +6,16 @@ class Stats:
         self.users_total = dictionary['users']['total']
         self.users_alive = dictionary['users']['alive']
         self.nodes_images = dictionary['nodes']['images']
-        self.nodes_audios = dictionary['nodes']['audios']
+        # self.nodes_audios = dictionary['nodes']['audios']
         self.nodes_videos = dictionary['nodes']['videos']
         self.nodes_texts = dictionary['nodes']['texts']
-        self.nodes_total = dictionary['nodes']['total']
+        # self.nodes_total = dictionary['nodes']['total']
         self.comments_total = dictionary['comments']['total']
         self.files_count = dictionary['files']['count']
         self.files_size = dictionary['files']['size']
         self.timestamps_boris = dictionary['timestamps']['boris_last_comment']
         self.timestamps_flow = dictionary['timestamps']['flow_last_post']
+        # TODO раскомментировать атрибуты, когда это будет нужно
 
 
 class Comments:
@@ -66,7 +67,7 @@ class File:
 class BasicUser:
     def __init__(self, dictionary):
         self.id = dictionary['id']
-        self.photo = File(dictionary['photo'])
+        self.photo = dictionary['photo'].replace('REMOTE_CURRENT://', _URL)
         self.username = dictionary['username']
 
 
@@ -98,7 +99,7 @@ class BasicPost:
 class DiffPost(BasicPost):
     def __init__(self, dictionary):
         super().__init__(dictionary)
-        self.user = User(dictionary['user'])
+        self.user = BasicUser(dictionary['user'])
 
 
 class Node(BasicPost):

@@ -2,23 +2,19 @@ from .types import Stats, Comments, Diff, User, Node, Tag
 from utils import log
 import requests
 
-TEST_URL = 'https://staging.vault48.org:3334/'
-MAIN_URL = 'https://vault48.org:3333/'
+TEST_URL = 'https://pig.staging.vault48.org/'
+MAIN_URL = 'https://pig.vault48.org/'
 
 
 class Api:
     def __init__(self, testing=False):
-        if testing:
-            url = TEST_URL
-        else:
-            url = MAIN_URL
-        self.url = url[:-6] + '/'
-        self._stats_url = url + 'stats'
-        self._node_url = url + 'node/{}'
-        self.post_url = url + 'post{}'
-        self._diff_url = url + 'node/diff'
-        self._comments_url = url + 'node/{}/comment'
-        self._related_url = url + 'node/{}/related'
+        self.url = MAIN_URL if testing else TEST_URL
+        self._stats_url = self.url + 'stats'
+        self._node_url = self.url + 'node/{}'
+        self.post_url = self.url + 'post{}'
+        self._diff_url = self.url + 'flow/diff'
+        self._comments_url = self.url + 'node/{}/comment'
+        self._related_url = self.url + 'node/{}/related'
         self.boris_node = 696
 
     def get_stats(self):
