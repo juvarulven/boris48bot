@@ -1,4 +1,4 @@
-_URL = 'https://vault48.org:3333/'
+_URL = 'https://pig.vault48.org/'
 
 
 class Stats:

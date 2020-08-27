@@ -1,5 +1,6 @@
 from typing import Union, Optional, Dict, List, Callable, Any
 from telebot import types as markups
+from telebot import apihelper
 from database import Database
 from vault_api import Api
 from vault_api.types import DiffPost, Comment
@@ -279,11 +280,17 @@ class Vault:
         if description:
             message += '\n_да вдобавок пишет:_\n\n{}'.format(de_markdown(description))
         try:
+            apihelper.CONNECT_TIMEOUT = 10
+            file_id = ''
             for addressee in self._last_updates['flow']['subscribers']:
-                TELEGRAM_BOT.value.send_photo(addressee, thumbnail, caption=message, parse_mode='Markdown')
+                file_id = TELEGRAM_BOT.value.send_photo(addressee,
+                                                        file_id if file_id else thumbnail,
+                                                        caption=message,
+                                                        parse_mode='Markdown').photo[-1].file_id
         except Exception as error:
             error_message = 'vault_plugin: Ошибка при попытке отправить фото в телеграмм: ' + str(error)
             log.log(error_message)
+        apihelper.CONNECT_TIMEOUT = 3.5
 
     def _send_text_message(self, post: DiffPost, link: str) -> None:
         user = self._generate_markdown_user_link(post.user.username)
