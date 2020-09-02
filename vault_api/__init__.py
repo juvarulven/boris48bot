@@ -1,3 +1,4 @@
+from . import types
 from .types import Stats, Comments, Diff, User, Node, Tag
 from utils import log
 import requests
@@ -9,6 +10,7 @@ MAIN_URL = 'https://pig.vault48.org/'
 class Api:
     def __init__(self, testing=False):
         self.url = MAIN_URL if testing else TEST_URL
+        types.URL = self.url + 'static/'
         self._stats_url = self.url + 'stats'
         self._node_url = self.url + 'node/{}'
         self.post_url = self.url + 'post{}'
