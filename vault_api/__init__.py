@@ -84,5 +84,5 @@ class Api:
 
 def get_json(url, **params):
     response = requests.get(url, **params)
-    if response.status_code == 200:
+    if response.ok:
         return response.json()
