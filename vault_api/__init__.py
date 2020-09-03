@@ -2,6 +2,7 @@ from . import types
 from .types import Stats, Comments, Diff, User, Node, Tag
 from utils import log
 import requests
+import datetime
 
 TEST_URL = 'https://pig.staging.vault48.org/'
 MAIN_URL = 'https://pig.vault48.org/'
@@ -9,7 +10,7 @@ MAIN_URL = 'https://pig.vault48.org/'
 
 class Api:
     def __init__(self, testing=False):
-        self.url = MAIN_URL if testing else TEST_URL
+        self.url = TEST_URL if testing else MAIN_URL
         types.URL = self.url + 'static/'
         self._stats_url = self.url + 'stats'
         self._node_url = self.url + 'node/{}'
@@ -28,6 +29,10 @@ class Api:
 
     def get_diff(self, start=None, end=None, with_heroes=False,
                  with_updated=False, with_recent=False, with_valid=False):
+        if start is None or end is None:
+            time = datetime.datetime.utcnow().isoformat(timespec='milliseconds')[:-1] + 'Z'
+            start = time
+            end = time
         params = {'start': start,
                   'end': end,
                   'with_heroes': str(with_heroes).lower(),

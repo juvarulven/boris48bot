@@ -154,6 +154,7 @@ class Vault:
         return comments_list
 
     def _update_godnota(self) -> bool:
+        # TODO протестировать, когда Григорий починит recent
         need_update_db = False
         recent = self._api.get_recent()
         if recent is None:

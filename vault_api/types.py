@@ -63,7 +63,8 @@ class BasicUser:
     def __init__(self, dictionary):
         self.id = dictionary['id']
         photo = dictionary['photo']
-        self.photo = '' if photo is None else photo.replace('REMOTE_CURRENT://', URL)
+        photo = photo['url'] if isinstance(photo, dict) else photo
+        self.photo = photo.replace('REMOTE_CURRENT://', URL) if photo is not None else ''
         self.username = dictionary['username']
 
 
