@@ -10,15 +10,20 @@ MAIN_URL = 'https://pig.vault48.org/'
 
 class Api:
     def __init__(self, testing=False):
-        self.url = TEST_URL if testing else MAIN_URL
-        types.URL = self.url + 'static/'
-        self._stats_url = self.url + 'stats'
-        self._node_url = self.url + 'node/{}'
-        self.post_url = self.url + 'post{}'
-        self._diff_url = self.url + 'flow/diff'
-        self._comments_url = self.url + 'node/{}/comment'
-        self._related_url = self.url + 'node/{}/related'
+        # Backend urls (example: https://pig.staging.vault48.org/node/696)
+        self._url = TEST_URL if testing else MAIN_URL
+        self._stats_url = self._url + 'stats'
+        self._node_url = self._url + 'node/{}'
+        self._diff_url = self._url + 'flow/diff'
+        self._comments_url = self._url + 'node/{}/comment'
+        self._related_url = self._url + 'node/{}/related'
+
+        # Frontend urls (example: https://staging.vault48.org/post696)
+        self.url = self._url[:8] + self._url[12:]
+        self.post_url = self._url + 'post{}'
+
         self.boris_node = 696
+        types.URL = self._url + 'static/'  # Forward backend static url in types
 
     def get_stats(self):
         try:

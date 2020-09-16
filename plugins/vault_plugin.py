@@ -306,7 +306,7 @@ class Vault:
         template = '{} _делится_ [аудиозаписью]({}) _в Течении (а может и не одной)._'
         message = template.format(user, link)
         for addressee in self._last_updates['flow']['subscribers']:
-            TELEGRAM_BOT.value.message(addressee, message, parse_mode='Markdown')
+            TELEGRAM_BOT.value.send_message(addressee, message, parse_mode='Markdown')
 
     def _send_video_message(self, post: DiffPost, link: str) -> None:
         user = self._generate_markdown_user_link(post.user.username)
