@@ -52,6 +52,7 @@ from . import speak_plugin
 from . import vault_plugin
 from . import stop_plugin
 from . import who_plugin
+from . import achtung_plugin
 
 command_handlers: List[Dict[str, Union[List[str], Callable[[Any], None], int]]] = [
     {'commands': ['start'], 'handler': help_plugin.start_message, 'access_level': 1},
@@ -61,6 +62,7 @@ command_handlers: List[Dict[str, Union[List[str], Callable[[Any], None], int]]] 
     {'commands': ['sub'], 'handler': vault_plugin.vault.sub, 'access_level': 1},
     {'commands': ['unsub'], 'handler': vault_plugin.vault.unsub, 'access_level': 1},
     {'commands': ['who'], 'handler': who_plugin.who, 'access_level': 2},
+    {'commands': ['achtung'], 'handler': achtung_plugin.achtung, 'access_level': 2},
     {'commands': ['stop'], 'handler': stop_plugin.stop, 'access_level': 2}
 ]
 
