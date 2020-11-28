@@ -17,6 +17,7 @@ class Api:
         self._diff_url = self._url + 'flow/diff'
         self._comments_url = self._url + 'node/{}/comment'
         self._related_url = self._url + 'node/{}/related'
+        self._tags_url = self._url + 'tag/nodes'
 
         # Frontend urls (example: https://staging.vault48.org/post696)
         self.url = self._url[:8] + self._url[12:]
@@ -72,16 +73,17 @@ class Api:
         return self.get_comments(self.boris_node, take, skip)
 
     def get_godnota(self):
-        node_names_and_ids = {'Хорошей музыки тред': 1691}
+        params = {'name': '/годнота',
+                  'offset': 0,
+                  'limit': 25}
         try:
-            response = get_json(self._related_url.format(1691))['related']['albums']['/годнота']
+            response = get_json(self._tags_url, params=params)
         except Exception as error:
-            error_message = 'vault_api: Ошибка при попытке получить related Убежища' + str(error)
+            error_message = 'vault_api: Ошибка при попытке получить годноту Убежища' + str(error)
             log.log(error_message)
             return
-        for node in response:
-            node_names_and_ids[node['title']] = node['id']
-        return node_names_and_ids
+        nodes = response['nodes']
+        return {node['title']: node['id'] for node in nodes}
 
     def get_node(self, node):
         try:
