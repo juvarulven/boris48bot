@@ -9,6 +9,7 @@ verify_ssl = true
 pytelegrambotapi = "*"
 requests = "*"
 bson = "*"
+urllib3 = "*"
 
 [requires]
 python_version = "3.8"
